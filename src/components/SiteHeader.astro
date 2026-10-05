@@ -1,0 +1,28 @@
+---
+interface Props { crumb?: string; }
+const { crumb } = Astro.props;
+---
+<header class="site-header">
+  <div class="site-header-left">
+    <a class="site-mark" href="/">
+      <span class="site-mark-icon" aria-hidden="true">R</span>
+      <span>RAG from First Principles</span>
+    </a>
+    {crumb && <><span class="header-separator" aria-hidden="true">/</span><span class="header-crumb">{crumb}</span></>}
+  </div>
+  <nav aria-label="Primary navigation">
+    <a href="/#chapters">Curriculum</a>
+  </nav>
+</header>
+
+<style>
+  .site-header { position: sticky; top: 0; z-index: 50; min-height: 56px; background: color-mix(in oklab, var(--paper) 86%, transparent); backdrop-filter: blur(12px); }
+  .site-header-left, .site-header nav { display: flex; align-items: center; gap: .8rem; min-width: 0; }
+  .site-mark { display: flex; align-items: center; gap: .65rem; font-size: .9rem; font-weight: 700; white-space: nowrap; }
+  .site-mark-icon { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 6px; background: var(--accent); color: var(--paper); font: 700 .9rem Georgia, serif; }
+  .header-separator { color: var(--ink-soft); }
+  .header-crumb { color: var(--ink-muted); font: .78rem Consolas, monospace; }
+  .site-header nav a { color: var(--ink-muted); font: .78rem Consolas, monospace; text-decoration: none; }
+  .site-header nav a:hover { color: var(--accent); }
+  @media (max-width: 620px) { .site-mark > span:last-child, .header-separator, .header-crumb, .site-header nav a:last-child { display: none; } }
+</style>

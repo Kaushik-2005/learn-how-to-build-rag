@@ -1,0 +1,55 @@
+---
+import type { MarkdownHeading } from 'astro';
+import Base from './Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import ChapterList from '../components/ChapterList.astro';
+import Toc from '../components/Toc.astro';
+import '../styles/prose.css';
+
+interface ChapterData { title: string; description: string; order: number; readingTime: string; toc?: string[]; }
+interface Props {
+  chapter: ChapterData;
+  headings: MarkdownHeading[];
+  previous?: { id: string; data: { title: string; navTitle?: string } };
+  next?: { id: string; data: { title: string; navTitle?: string } };
+}
+
+const { chapter, headings, previous, next } = Astro.props;
+const number = String(chapter.order).padStart(2, '0');
+---
+<Base title={`${chapter.title} - Chapter ${number} - RAG From First Principles`} description={chapter.description}>
+  <SiteHeader crumb={`Chapter ${number}`} />
+  <div class="reading-progress" aria-hidden="true"><span></span></div>
+  <div class="chapter-shell">
+    <aside class="chapter-rail" aria-label="Chapter navigation"><ChapterList /></aside>
+    <main class="chapter-main" id="main">
+      <header class="chapter-header">
+        <p class="eyebrow"><span>Chapter {number}</span><b aria-hidden="true"></b><span>{chapter.readingTime}</span></p>
+        <h1>{chapter.title}</h1>
+        <p class="chapter-summary">{chapter.description}</p>
+      </header>
+      <article class="prose"><slot /></article>
+      <nav class="chapter-navigation" aria-label="Chapter navigation">
+        {previous ? <a class="chapter-nav-card" href={`/chapters/${previous.id}`} rel="prev"><small>&larr; Previous</small><span>{previous.data.navTitle ?? previous.data.title}</span></a> : <span></span>}
+        {next ? <a class="chapter-nav-card next" href={`/chapters/${next.id}`} rel="next"><small>Next &rarr;</small><span>{next.data.navTitle ?? next.data.title}</span></a> : <span></span>}
+      </nav>
+    </main>
+
+    <aside class="chapter-outline" aria-label="Current chapter outline"><Toc headings={headings} visibleHeadings={chapter.toc} /></aside>
+  </div>
+</Base>
+
+<script>
+  const progress = document.querySelector<HTMLElement>('.reading-progress span');
+  const article = document.querySelector<HTMLElement>('.prose');
+  if (progress && article) {
+    const update = () => {
+      const span = article.offsetHeight - window.innerHeight;
+      const amount = span <= 0 ? 1 : (window.scrollY - article.offsetTop) / span;
+      progress.style.width = `${Math.min(Math.max(amount, 0), 1) * 100}%`;
+    };
+    update();
+    addEventListener('scroll', update, { passive: true });
+    addEventListener('resize', update);
+  }
+</script>

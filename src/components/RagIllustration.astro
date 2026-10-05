@@ -1,0 +1,208 @@
+---
+interface Props { kind: 'rag-basics' | 'cleaning' | 'chunking' | 'embeddings' | 'search-modes' | 'hnsw-layers' | 'ivf-pq' | 'sources' | 'vector-record' | 'context-flow' | 'loading-flow' | 'extract-structure' | 'chunk-position' | 'prep-flow' | 'embedding-flow' | 'recursive-flow' | 'decision-record'; label?: string; }
+const { kind, label } = Astro.props;
+const labels = {
+  'rag-basics': 'Model memory complemented by retrieved, traceable external evidence',
+  cleaning: 'Document preparation from raw source to traceable document',
+  chunking: 'Document divided into retrieval chunks while retaining context',
+  embeddings: 'Text chunks represented as points in an embedding space',
+  'search-modes': 'Exact search compares every vector while approximate search visits a subset of the space',
+  'hnsw-layers': 'HNSW searches from sparse upper graph layers into denser local neighborhoods',
+  'ivf-pq': 'IVF probes selected vector partitions while product quantization stores compact codes',
+  sources: 'Different source types becoming one document record',
+  'vector-record': 'An embedding stored together with identity, provenance, metadata, and access constraints',
+  'context-flow': 'Retrieved chunks expanded into final generation context',
+  'loading-flow': 'A source loader extracting content and metadata into a document record',
+  'extract-structure': 'Structured source content can lose relationships when flattened during extraction',
+  'chunk-position': 'Chunking placed between preparation and representation',
+  'prep-flow': 'Raw source transformed into prepared text before chunking',
+  'embedding-flow': 'Chunks and queries transformed into compatible vectors for search',
+  'recursive-flow': 'Recursive chunking preserves larger boundaries before making smaller cuts',
+  'decision-record': 'A compact record of the boundaries, limits, overlap, and traceability rules for chunking'
+};
+const flowData: Record<string, { title: string; note: string; steps: string[]; active?: number }> = {
+  'context-flow': { title: 'CONTEXT CONSTRUCTION / 05', note: 'retrieve precisely / expand carefully / format for generation', steps: ['Prepared document', 'Parent section', 'Child chunks', 'Retrieve candidates', 'Expand context', 'Final context'] },
+  'loading-flow': { title: 'LOADER CONTRACT / 03', note: 'content + metadata + source identity + location', steps: ['Source system', 'Loader', 'Content', 'Metadata', 'Document record'], active: 1 },
+  'chunk-position': { title: 'PIPELINE POSITION / 05', note: 'each stage answers a different question', steps: ['Source', 'Loading', 'Cleaning', 'Chunking', 'Representation', 'Index'], active: 3 },
+  'prep-flow': { title: 'PREPARATION RECORD / 04', note: 'retain the artifacts needed to diagnose information loss', steps: ['Raw source', 'Extracted representation', 'Prepared representation', 'Ready to chunk'], active: 2 },
+  'embedding-flow': { title: 'EMBEDDING FLOW / 06', note: 'same representation contract on both sides of search', steps: ['Text chunk', 'Encoder', 'Document vector', 'Query vector', 'Similarity', 'Candidates'] },
+};
+const flow = flowData[kind as keyof typeof flowData];
+---
+
+<div class:list={['rag-illustration', `is-${kind}`]} role="img" aria-label={label ?? labels[kind]}>
+  {flow && <div class="flow-illustration">
+    <div class="illustration-kicker">{flow.title}</div>
+    <div class="flow-track">
+      {flow.steps.map((step, index) => <><span class:list={{ 'flow-final': index === (flow.active ?? flow.steps.length - 1) }}>{step}</span>{index < flow.steps.length - 1 && <b>&rarr;</b>}</>)}
+    </div>
+    <p class="illustration-note">{flow.note}</p>
+  </div>}
+
+  {kind === 'rag-basics' && <>
+    <div class="illustration-kicker">TWO KINDS OF MEMORY / 01</div>
+    <div class="memory-scene">
+      <section class="memory-model">
+        <small>PARAMETRIC MEMORY</small>
+        <div class="memory-orb"><i></i><i></i><i></i><i></i><i></i><i></i><b>MODEL</b></div>
+        <strong>Broad learned patterns</strong>
+        <span>useful, but not a live source collection</span>
+      </section>
+      <div class="memory-question"><small>QUESTION</small><strong>What does the current policy require?</strong></div>
+      <section class="memory-library">
+        <small>EXTERNAL SOURCES</small>
+        <div class="memory-file old"><b>Policy · v3</b><span>superseded</span></div>
+        <div class="memory-file selected"><b>Policy · v4</b><span>current evidence</span></div>
+        <div class="memory-file"><b>Source · §2</b><span>page + version retained</span></div>
+      </section>
+      <div class="memory-caption"><span>retrieval selects evidence for this question</span><b>answer can point back to the source</b></div>
+    </div>
+  </>}
+
+  {kind === 'cleaning' && <>
+    <div class="illustration-kicker">PREPARATION / 01</div>
+    <div class="clean-stage raw"><small>RAW SOURCE</small><strong>PDF / HTML / SCAN</strong><i>noise + layout</i></div>
+    <div class="stage-arrow">&rarr;</div>
+    <div class="clean-stage"><small>PREPARE</small><strong>decode · clean · preserve</strong><i>structure + checks</i></div>
+    <div class="stage-arrow">&rarr;</div>
+    <div class="clean-stage final"><small>READY FOR CHUNKING</small><strong>document + metadata</strong><i>source · version · access</i></div>
+  </>}
+
+  {kind === 'sources' && <>
+    <div class="illustration-kicker">SOURCE MAP / 03</div>
+    <div class="source-map-stage"><div class="source-orbit"><strong>DOCUMENT<br />RECORD</strong></div><div class="source-card source-a">PDF / WORD</div><div class="source-card source-b">WEB / HTML</div><div class="source-card source-c">SQL / CSV</div><div class="source-card source-d">CODE REPO</div><div class="source-card source-e">SLACK / EMAIL</div><div class="source-card source-f">IMAGE / AUDIO / VIDEO</div></div>
+    <p class="illustration-note">different artifacts &nbsp; / &nbsp; one traceable internal representation</p>
+  </>}
+
+  {kind === 'vector-record' && <>
+    <div class="illustration-kicker">VECTOR RECORD / 07</div>
+    <div class="vector-record-card">
+      <div class="vector-record-vector"><small>EMBEDDING</small><strong>[ 0.12, -0.44, 0.87, ... ]</strong><span>numeric representation used for similarity</span></div>
+      <div class="vector-record-fields">
+        <div><span>chunk_id</span><b>policy-v7:section-3:chunk-02</b></div>
+        <div><span>chunk text</span><b>stored text or recoverable reference</b></div>
+        <div><span>source</span><b>policy.pdf / page 4</b></div>
+        <div><span>metadata</span><b>tenant, type, effective date</b></div>
+        <div><span>access</span><b>retrieval constraint</b></div>
+      </div>
+    </div>
+    <p class="illustration-note">vector for search / record for meaning, provenance, and control</p>
+  </>}
+
+  {kind === 'chunking' && <>
+    <div class="illustration-kicker">BOUNDARIES / 02</div>
+    <div class="chunking-scene">
+      <section class="source-fragment"><small>PREPARED SECTION</small><div><span>Heading: Credential rotation</span><span>Credentials expire after 30 days.</span><span>Exceptions require manager approval.</span></div></section>
+      <div class="chunk-arrow">&darr; split at a meaningful boundary</div>
+      <section class="chunk-fragments"><div class="chunk-piece"><small>CHUNK 01</small><span>Credentials expire after 30 days.</span><em>Rotation scope</em></div><div class="chunk-piece selected"><small>CHUNK 02</small><em>Rotation scope</em><span>Exceptions require manager approval.</span></div></section>
+    </div>
+    <p class="illustration-note">the shared boundary context is repeated / source location remains attached</p>
+  </>}
+
+  {kind === 'embeddings' && <>
+    <div class="illustration-kicker">REPRESENTATION / 03</div>
+    <div class="embedding-axis x"></div><div class="embedding-axis y"></div>
+    <div class="embedding-cluster cluster-a"><i></i><i></i><i></i><i></i><span>policy</span></div>
+    <div class="embedding-cluster cluster-b"><i></i><i></i><i></i><span>code</span></div>
+    <div class="query-point"><span>query</span></div>
+    <div class="embedding-copy"><strong>SCHEMATIC 2D VIEW</strong><small>distance is a geometric signal,<br />not a probability of truth</small></div>
+  </>}
+
+  {kind === 'search-modes' && <>
+    <div class="illustration-kicker">SEARCH SPACE / 07</div>
+    <div class="search-comparison">
+      <section class="search-field exact-field"><small>EXACT · FLAT SCAN</small><div class="search-dots">{Array.from({length: 16}, (_, i) => <i class:list={{ 'near-dot': [2, 6, 11].includes(i) }} />)}<b class="search-query">q</b></div><span>compare against every vector</span></section>
+      <section class="search-field ann-field"><small>APPROXIMATE · CANDIDATE VISIT</small><div class="search-dots">{Array.from({length: 16}, (_, i) => <i class:list={{ 'visited-dot': [2, 3, 6, 7].includes(i), 'near-dot': [2, 6, 11].includes(i) }} />)}<b class="search-query">q</b></div><span>visit a subset; the exact nearest item may be missed</span></section>
+    </div>
+    <p class="illustration-note">exact search is the reference ranking / ANN trades some recall for less search work</p>
+  </>}
+
+  {kind === 'hnsw-layers' && <>
+    <div class="illustration-kicker">HIERARCHICAL GRAPH / 07</div>
+    <div class="hnsw-scene">
+      <div class="hnsw-layer upper"><small>SPARSE · LONGER MOVES</small><i class="hnode h1"></i><i class="hnode h2"></i><i class="hnode h3"></i><svg viewBox="0 0 600 70" aria-hidden="true"><path d="M80 44L285 22L500 46" /></svg></div>
+      <div class="hnsw-descent"><b>entry point</b><span></span><b>descend</b></div>
+      <div class="hnsw-layer lower"><small>DENSE · LOCAL REFINEMENT</small><i class="hnode h4"></i><i class="hnode h5"></i><i class="hnode h6"></i><i class="hnode h7"></i><i class="hnode h8"></i><svg viewBox="0 0 600 100" aria-hidden="true"><path d="M45 60L155 34L265 65L375 30L500 61M155 34L210 80L375 30M265 65L375 30L500 61" /></svg><b class="hnsw-target">query region</b></div>
+    </div>
+    <p class="illustration-note">upper layers guide the search / the bottom layer explores nearby candidates</p>
+  </>}
+
+  {kind === 'ivf-pq' && <>
+    <div class="illustration-kicker">PARTITION + COMPRESSION / 07</div>
+    <div class="ivf-scene">
+      <div class="ivf-space">
+        <div class="ivf-cell cell-one"><b>centroid A</b><i></i><i></i><i></i></div>
+        <div class="ivf-cell cell-two selected-cell"><b>centroid B</b><i></i><i></i><i></i><i class="query-vector">q</i></div>
+        <div class="ivf-cell cell-three"><b>centroid C</b><i></i><i></i><i></i></div>
+        <div class="ivf-cell cell-four"><b>centroid D</b><i></i><i></i></div>
+        <span class="probe-ring"></span>
+      </div>
+      <div class="ivf-connector"><span>probe selected lists</span><b>&rarr;</b></div>
+      <div class="pq-strip"><small>PQ CODES IN VISITED LISTS</small><div><b>17</b><b>04</b><b>29</b><b>11</b><b>08</b><b>23</b></div><span>compact sub-vector code IDs approximate stored vectors</span></div>
+    </div>
+    <p class="illustration-note">IVF limits which records are visited / PQ reduces the cost of storing and comparing them</p>
+  </>}
+
+  {kind === 'extract-structure' && <>
+    <div class="illustration-kicker">STRUCTURE PRESERVATION / 03</div>
+    <div class="extract-scene">
+      <section class="extract-table"><small>ORIGINAL TABLE</small><div class="extract-table-head"><b>Plan</b><b>Retention</b></div><div><span>Standard</span><strong>30 days</strong></div><div><span>Enterprise</span><strong>90 days</strong></div></section>
+      <div class="extract-lens"><span>EXTRACT</span><b>&rarr;</b></div>
+      <section class="extract-output"><small>RETRIEVABLE RECORDS</small><div class="extract-row"><b>Standard</b><span>&harr;</span><strong>30 days</strong></div><div class="extract-row"><b>Enterprise</b><span>&harr;</span><strong>90 days</strong></div><p>keep each value attached to its header and row</p></section>
+    </div>
+    <p class="illustration-note">characters can survive extraction while their relationships are lost</p>
+  </>}
+
+  {kind === 'recursive-flow' && <>
+    <div class="illustration-kicker">SEPARATOR PRIORITY / 05</div>
+    <div class="recursive-ladder">
+      <div class="recursive-step selected"><small>01</small><strong>Section break</strong><span>preserve the largest meaningful unit</span></div><div class="recursive-arrow">&rarr;</div>
+      <div class="recursive-step"><small>02</small><strong>Paragraph break</strong><span>keep related prose together</span></div><div class="recursive-arrow">&rarr;</div>
+      <div class="recursive-step"><small>03</small><strong>Line / sentence</strong><span>fallback only when still too large</span></div><div class="recursive-arrow">&rarr;</div>
+      <div class="recursive-step"><small>04</small><strong>Word / character</strong><span>last resort for bounded pieces</span></div>
+    </div>
+    <p class="illustration-note">try the largest boundary first / cut smaller only when necessary</p>
+  </>}
+
+  {kind === 'decision-record' && <>
+    <div class="illustration-kicker">CHUNKING POLICY / 05</div>
+    <div class="decision-record">
+      <div class="decision-row"><span class="decision-key">source type</span><b>policy PDFs</b></div>
+      <div class="decision-row"><span class="decision-key">primary boundary</span><b>heading + paragraph</b></div>
+      <div class="decision-row"><span class="decision-key">fallback</span><b>token window</b></div>
+      <div class="decision-row"><span class="decision-key">target size</span><b>bounded token range</b></div>
+      <div class="decision-row"><span class="decision-key">overlap</span><b>fallback boundaries only</b></div>
+      <div class="decision-row"><span class="decision-key">heading context</span><b>inherited path</b></div>
+      <div class="decision-row"><span class="decision-key">traceability</span><b>page + section identifiers</b></div>
+    </div>
+    <p class="illustration-note">make the splitter's behavior explicit before comparing results</p>
+  </>}
+</div>
+
+<style>
+  .rag-illustration { position: relative; min-height: 260px; margin: 2.5rem 0; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--paper); color: var(--ink); font-family: Georgia, 'Times New Roman', serif; }
+  .rag-illustration::before { content: ''; position: absolute; inset: 0; opacity: .55; background-image: linear-gradient(to right, rgba(40,35,28,.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(40,35,28,.035) 1px, transparent 1px); background-size: 34px 34px; mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent); }
+  .illustration-kicker { position: absolute; left: 1.2rem; top: 1.1rem; z-index: 2; color: var(--accent); font: .65rem Consolas, monospace; letter-spacing: .14em; }
+  .flow-illustration { position: absolute; inset: 0; padding: 4.6rem 1.4rem 1.4rem; }.flow-track { position: relative; z-index: 1; display: flex; align-items: center; gap: .4rem; width: 100%; padding: 1.3rem .25rem; }.flow-track span { flex: 1 1 0; min-width: 0; padding: .85rem .45rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--ink-muted); font-size: .78rem; line-height: 1.25; text-align: center; }.flow-track span.flow-final { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }.flow-track b { flex: 0 0 auto; color: var(--accent); font-size: 1.1rem; font-weight: 400; }.flow-illustration .illustration-note { margin-top: 2rem; }
+  .is-rag-basics { min-height: 350px; padding: 4.5rem 1.4rem 1.4rem; }.memory-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, .8fr) minmax(0, 1fr); align-items: center; gap: 1.1rem; width: min(100%, 780px); margin: 0 auto; }.memory-model, .memory-library { display: flex; min-height: 205px; flex-direction: column; justify-content: center; gap: .65rem; padding: 1rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }.memory-model > small, .memory-library > small, .memory-question small { color: var(--accent); font: .58rem Consolas, monospace; letter-spacing: .1em; }.memory-model > strong { font-size: .94rem; }.memory-model > span { color: var(--ink-muted); font-size: .72rem; line-height: 1.4; }.memory-orb { position: relative; display: grid; width: 82px; height: 82px; align-self: center; place-items: center; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 8px var(--accent-bg); }.memory-orb b { color: var(--accent); font: .62rem Consolas, monospace; letter-spacing: .08em; }.memory-orb i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-muted); }.memory-orb i:nth-child(1) { top: 12px; left: 23px; }.memory-orb i:nth-child(2) { top: 19px; right: 12px; }.memory-orb i:nth-child(3) { right: 9px; bottom: 22px; }.memory-orb i:nth-child(4) { bottom: 10px; left: 29px; }.memory-orb i:nth-child(5) { bottom: 28px; left: 10px; }.memory-orb i:nth-child(6) { top: 30px; right: 3px; }.memory-question { position: relative; z-index: 2; display: flex; min-height: 84px; flex-direction: column; justify-content: center; gap: .45rem; padding: .8rem; border: 1px solid var(--accent); background: var(--accent-bg); text-align: center; }.memory-question strong { font-size: .8rem; line-height: 1.35; }.memory-file { display: flex; justify-content: space-between; gap: .4rem; padding: .4rem .5rem; border-bottom: 1px solid var(--line); color: var(--ink-muted); font-size: .66rem; }.memory-file b { font-weight: 400; }.memory-file span { font: .56rem Consolas, monospace; }.memory-file.old { opacity: .55; text-decoration: line-through; }.memory-file.selected { border: 1px solid var(--accent); background: var(--accent-bg); color: var(--accent); }.memory-caption { grid-column: 1 / -1; display: flex; justify-content: space-between; padding: 0 .2rem; color: var(--ink-muted); font: .65rem Consolas, monospace; }.memory-caption b { color: var(--accent); font-weight: 400; }
+  .is-extract-flow { min-height: 300px; padding: 4.5rem 1.4rem 1.2rem; }.extract-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 1rem; width: min(100%, 760px); margin: 0 auto; }.extract-table, .extract-output { min-height: 150px; padding: .85rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }.extract-table > small, .extract-output > small, .pq-strip > small { color: var(--accent); font: .58rem Consolas, monospace; letter-spacing: .1em; }.extract-table-head, .extract-table > div:not(.extract-table-head), .extract-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; padding: .48rem .35rem; border-bottom: 1px solid var(--fainter); font-size: .72rem; }.extract-table-head { margin-top: .5rem; color: var(--ink-muted); font: .62rem Consolas, monospace; }.extract-table strong { color: var(--accent); font-weight: 400; }.extract-lens { display: grid; justify-items: center; gap: .4rem; color: var(--accent); font: .55rem Consolas, monospace; }.extract-lens b { font-size: 1.2rem; font-weight: 400; }.extract-row { grid-template-columns: 1fr auto 1fr; align-items: center; font: .65rem Consolas, monospace; }.extract-row span { color: var(--accent); }.extract-row strong { font-weight: 400; }.extract-output p { margin: .55rem .3rem 0; color: var(--ink-muted); font-size: .65rem; line-height: 1.4; }
+  .stage-arrow, .chunk-arrow { color: var(--accent); font: 1.35rem Georgia, serif; }
+  .source-map-stage { position: absolute; inset: 3.8rem 0 2.8rem; }.source-orbit { position: absolute; z-index: 2; left: 50%; top: 50%; display: grid; width: 118px; height: 118px; place-items: center; transform: translate(-50%, -50%); border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 10px rgba(185,77,43,.04); text-align: center; }.source-orbit strong { color: var(--accent); font: .67rem/1.5 Consolas, monospace; letter-spacing: .08em; }.source-card { position: absolute; z-index: 2; padding: .55rem .7rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--ink-muted); font: .65rem Consolas, monospace; white-space: nowrap; }.source-a { left: 10%; top: 31%; }.source-b { left: 29%; top: 16%; }.source-c { right: 29%; top: 16%; }.source-d { right: 10%; top: 31%; }.source-e { right: 16%; bottom: 20%; }.source-f { left: 16%; bottom: 20%; }.is-sources .illustration-note { position: absolute; z-index: 2; right: 0; bottom: 1.3rem; left: 0; margin: 0; }
+  .is-vector-record { min-height: 320px; padding: 4.5rem 1.4rem 1.4rem; }.vector-record-card { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); width: min(100%, 760px); margin: 0 auto; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }.vector-record-vector { display: flex; min-height: 175px; flex-direction: column; justify-content: center; gap: .65rem; padding: 1.2rem 1.35rem; border-right: 1px solid var(--line); }.vector-record-vector small, .vector-record-fields span { color: var(--accent); font: .62rem Consolas, monospace; letter-spacing: .1em; }.vector-record-vector strong { color: var(--ink); font: .9rem Consolas, monospace; }.vector-record-vector span { color: var(--ink-muted); font-size: .75rem; line-height: 1.4; }.vector-record-fields { display: grid; align-content: center; padding: .75rem 1.1rem; }.vector-record-fields div { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 1ch; padding: .35rem 0; border-bottom: 1px solid var(--fainter); }.vector-record-fields div:last-child { border-bottom: 0; }.vector-record-fields b { min-width: 0; color: var(--ink); font: .72rem/1.35 Consolas, monospace; font-weight: 400; overflow-wrap: anywhere; }.is-vector-record .illustration-note { margin-top: 1.2rem; }
+  .is-cleaning { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 1rem; padding: 4.6rem 1.4rem 2rem; }
+  .clean-stage { position: relative; z-index: 1; display: flex; min-height: 105px; flex-direction: column; justify-content: center; gap: .45rem; padding: 1rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }.clean-stage.raw { transform: rotate(-2deg); }.clean-stage.final { transform: rotate(2deg); }.is-cleaning > .clean-stage:nth-of-type(4) { border-color: var(--accent); background: var(--accent-bg); }.clean-stage small, .chunk-source small, .chunk-result small { color: var(--accent); font: .6rem Consolas, monospace; letter-spacing: .12em; }.clean-stage strong { font-size: 1rem; }.clean-stage i { color: var(--ink-muted); font-size: .78rem; font-style: normal; }
+  .is-chunking { min-height: 320px; padding: 4.5rem 1.4rem 1.2rem; }.chunking-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .9fr) auto minmax(0, 1.1fr); align-items: center; gap: .9rem; width: min(100%, 800px); margin: 0 auto; }.source-fragment { padding: .8rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }.source-fragment small, .chunk-piece small { color: var(--accent); font: .57rem Consolas, monospace; letter-spacing: .08em; }.source-fragment > div { display: grid; gap: .5rem; margin-top: .65rem; }.source-fragment span { padding: .4rem .5rem; border-left: 2px solid var(--line); color: var(--ink-muted); font-size: .69rem; line-height: 1.35; }.source-fragment span:nth-child(2) { border-color: var(--accent); background: var(--accent-bg); color: var(--ink); }.chunk-arrow { display: grid; justify-items: center; gap: .2rem; color: var(--accent); font: .56rem Consolas, monospace; text-align: center; }.chunk-fragments { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; }.chunk-piece { display: flex; min-height: 134px; flex-direction: column; justify-content: center; gap: .55rem; padding: .7rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }.chunk-piece + .chunk-piece { margin-left: -1px; }.chunk-piece.selected { position: relative; border-color: var(--accent); background: var(--accent-bg); }.chunk-piece > span { color: var(--ink); font-size: .68rem; line-height: 1.35; }.chunk-piece em { color: var(--accent); font-size: .63rem; font-style: normal; }.chunk-piece em::before { content: '↺ '; }.illustration-note { position: relative; z-index: 1; margin: .9rem 0 0; color: var(--ink-muted); font: .7rem Consolas, monospace; text-align: center; }
+  .is-embeddings { min-height: 300px; }.embedding-axis { position: absolute; z-index: 1; background: var(--line); }.embedding-axis.x { left: 10%; right: 8%; top: 68%; height: 1px; }.embedding-axis.y { bottom: 12%; left: 43%; top: 22%; width: 1px; }.embedding-axis.x::after { content: 'semantic direction'; position: absolute; right: 0; top: .4rem; color: var(--ink-soft); font: .6rem Consolas, monospace; }.embedding-cluster { position: absolute; z-index: 2; width: 120px; height: 100px; border: 1px dashed var(--line); border-radius: 50%; }.embedding-cluster i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }.cluster-a { left: 24%; top: 30%; }.cluster-a i:nth-child(1) { left: 30px; top: 32px; }.cluster-a i:nth-child(2) { left: 67px; top: 48px; }.cluster-a i:nth-child(3) { left: 52px; top: 70px; }.cluster-a i:nth-child(4) { left: 84px; top: 22px; }.cluster-b { left: 58%; top: 42%; }.cluster-b i:nth-child(1) { left: 25px; top: 35px; }.cluster-b i:nth-child(2) { left: 62px; top: 24px; }.cluster-b i:nth-child(3) { left: 72px; top: 64px; }.embedding-cluster span { position: absolute; bottom: -1.4rem; left: 0; color: var(--ink-muted); font: .65rem Consolas, monospace; }.query-point { position: absolute; z-index: 3; left: 34%; top: 43%; width: 15px; height: 15px; border: 2px solid var(--accent); border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 7px var(--accent-bg); }.query-point span { position: absolute; left: 1.5rem; top: -.3rem; color: var(--accent); font: .65rem Consolas, monospace; }.embedding-copy { position: absolute; z-index: 2; right: 8%; bottom: 17%; display: flex; flex-direction: column; gap: .35rem; }.embedding-copy strong { color: var(--accent); font: .61rem Consolas, monospace; letter-spacing: .05em; }.embedding-copy small { color: var(--ink-muted); font-size: .75rem; line-height: 1.45; }
+  .is-search-modes { min-height: 300px; padding: 4.5rem 1.4rem 1.2rem; }.search-comparison { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }.search-field { min-height: 150px; padding: .8rem 1rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }.search-field > small { color: var(--accent); font: .58rem Consolas, monospace; letter-spacing: .1em; }.search-field > span { display: block; margin-top: .4rem; color: var(--ink-muted); font-size: .7rem; text-align: center; }.search-dots { position: relative; display: grid; grid-template-columns: repeat(8, 1fr); align-items: center; justify-items: center; gap: .7rem .4rem; width: min(100%, 260px); margin: 1rem auto .3rem; }.search-dots i { width: 7px; height: 7px; border: 1px solid var(--line); border-radius: 50%; background: var(--paper); }.search-dots i.near-dot { width: 10px; height: 10px; border-color: var(--accent); background: var(--accent-bg); }.search-dots i.visited-dot:not(.near-dot) { background: var(--ink-muted); border-color: var(--ink-muted); }.search-query { position: absolute; top: 50%; left: 50%; display: grid; width: 20px; height: 20px; place-items: center; transform: translate(-50%, -50%); border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); color: var(--accent); font: .65rem Consolas, monospace; }
+  .is-hnsw-layers { min-height: 330px; padding: 4.5rem 1.4rem 1.2rem; }.hnsw-scene { position: relative; z-index: 1; width: min(100%, 720px); margin: 0 auto; }.hnsw-layer { position: relative; min-height: 82px; padding: .6rem .8rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 84%, transparent); }.hnsw-layer.lower { min-height: 105px; border-color: var(--accent); }.hnsw-layer small { position: relative; z-index: 3; color: var(--ink-muted); font: .56rem Consolas, monospace; letter-spacing: .1em; }.hnsw-layer svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: var(--line); stroke-width: 1.3; }.hnsw-layer.lower svg { stroke: var(--accent); opacity: .72; }.hnode { position: absolute; z-index: 2; width: 10px; height: 10px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }.h1 { left: 13%; top: 52%; }.h2 { left: 48%; top: 30%; }.h3 { right: 14%; top: 55%; }.h4 { left: 8%; top: 62%; }.h5 { left: 27%; top: 39%; }.h6 { left: 45%; top: 66%; }.h7 { left: 65%; top: 38%; }.h8 { right: 11%; top: 62%; }.hnsw-descent { display: flex; height: 34px; align-items: center; justify-content: center; gap: .5rem; color: var(--ink-muted); font: .57rem Consolas, monospace; }.hnsw-descent span { width: 1px; height: 22px; background: var(--accent); }.hnsw-descent b { font-weight: 400; }.hnsw-target { position: absolute; z-index: 3; right: 13%; bottom: 12%; color: var(--accent); font: .56rem Consolas, monospace; }
+  .is-ivf-pq { min-height: 340px; padding: 4.5rem 1.4rem 1.2rem; }.ivf-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.1fr) auto minmax(0, .9fr); align-items: center; gap: .9rem; width: min(100%, 780px); margin: 0 auto; }.ivf-space { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; min-height: 190px; padding: .7rem; }.ivf-cell { position: relative; display: grid; grid-template-columns: repeat(3, 7px); align-content: center; justify-content: center; gap: .5rem; border: 1px solid var(--line); border-radius: 50%; }.ivf-cell > b { position: absolute; top: .3rem; left: .35rem; color: var(--ink-muted); font: .48rem Consolas, monospace; }.ivf-cell i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-soft); }.ivf-cell.selected-cell { border-color: var(--accent); background: var(--accent-bg); }.ivf-cell.selected-cell > b { color: var(--accent); }.ivf-cell i.query-vector { display: grid; width: 16px; height: 16px; place-items: center; border: 1px solid var(--accent); background: var(--paper); color: var(--accent); font: .55rem Consolas, monospace; }.probe-ring { position: absolute; top: 2%; right: 2%; width: 49%; height: 48%; border: 1px dashed var(--accent); border-radius: 50%; pointer-events: none; }.ivf-connector { display: grid; justify-items: center; gap: .25rem; color: var(--accent); font: .53rem Consolas, monospace; text-align: center; }.ivf-connector b { font-size: 1.1rem; font-weight: 400; }.pq-strip { display: flex; min-height: 150px; flex-direction: column; justify-content: center; gap: .7rem; padding: .8rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }.pq-strip > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem; }.pq-strip > div b { padding: .35rem .15rem; border: 1px solid var(--accent-bg); color: var(--accent); font: .62rem Consolas, monospace; text-align: center; }.pq-strip > span { color: var(--ink-muted); font-size: .63rem; line-height: 1.35; }
+  .is-recursive-flow { min-height: 310px; padding: 4.5rem 1.4rem 1.4rem; }.recursive-ladder { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .45rem; }.recursive-step { min-height: 112px; padding: .8rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }.recursive-step.selected { border-color: var(--accent); background: var(--accent-bg); }.recursive-step small { display: block; margin-bottom: .45rem; color: var(--accent); font: .6rem Consolas, monospace; }.recursive-step strong { display: block; font-size: .95rem; }.recursive-step span { display: block; margin-top: .4rem; color: var(--ink-muted); font-size: .7rem; line-height: 1.35; }.recursive-arrow { color: var(--accent); font-size: 1.1rem; text-align: center; }.is-recursive-flow .illustration-note { margin-top: 1.3rem; }
+  .is-decision-record { min-height: 320px; padding: 4.5rem 1.4rem 1.4rem; }.is-decision-record .decision-record { position: relative; z-index: 1; display: grid; width: min(100%, 700px); margin: 0 auto; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }.is-decision-record .decision-row { display: grid; grid-template-columns: 12rem minmax(0, 1fr); min-width: 0; }.is-decision-record .decision-row:not(:last-child) span, .is-decision-record .decision-row:not(:last-child) b { border-bottom: 1px solid var(--fainter); }.is-decision-record .decision-row span, .is-decision-record .decision-row b { min-width: 0; padding: .45rem .8rem; font: .72rem/1.35 Consolas, monospace; }.decision-key { color: var(--accent); }.is-decision-record .decision-row b { color: var(--ink); font-weight: 400; overflow-wrap: anywhere; }.is-decision-record .illustration-note { margin-top: 1.2rem; }
+  @media (max-width: 700px) { .is-cleaning { grid-template-columns: 1fr; gap: .5rem; padding-top: 4rem; }.stage-arrow { transform: rotate(90deg); text-align: center; }.clean-stage { min-height: 75px; }.chunk-source, .chunk-result { overflow-x: auto; }.chunk-source span, .chunk-result b { flex: 0 0 auto; }.embedding-copy { right: 5%; }.is-indexes { min-height: 260px; } }
+  @media (max-width: 700px) { .is-recursive-flow { min-height: 430px; }.recursive-ladder { grid-template-columns: 1fr; gap: .2rem; }.recursive-step { min-height: 0; }.recursive-arrow { line-height: 1; }.is-decision-record { min-height: 360px; }.is-decision-record .decision-row { grid-template-columns: 1fr; }.is-decision-record .decision-row span, .is-decision-record .decision-row b { border-bottom: 0; padding-bottom: .15rem; }.is-decision-record .decision-row b { padding-top: 0; padding-bottom: .55rem; }.decision-key { padding-bottom: 0 !important; }.is-vector-record { min-height: 440px; }.vector-record-card { grid-template-columns: 1fr; }.vector-record-vector { min-height: 135px; border-right: 0; border-bottom: 1px solid var(--line); }.vector-record-fields div { grid-template-columns: 6.5rem minmax(0, 1fr); } }
+  @media (max-width: 700px) { .is-chunking { min-height: 460px; }.chunking-scene { grid-template-columns: 1fr; gap: .45rem; }.chunk-arrow { line-height: 1.2; }.chunk-fragments { min-height: 135px; }.chunk-piece { padding: .5rem; }.source-fragment { min-height: 125px; } }
+  @media (max-width: 700px) { .flow-illustration { overflow-x: auto; }.flow-track { justify-content: flex-start; width: max-content; min-width: 760px; }.flow-track span { flex: 0 0 auto; white-space: nowrap; }.flow-illustration .illustration-note { text-align: left; } }
+  .is-extract-structure { min-height: 300px; padding: 4.5rem 1.4rem 1.2rem; }
+  @media (max-width: 700px) { .is-extract-structure { min-height: 470px; } }
+  @media (max-width: 700px) { .is-sources { min-height: 420px; }.is-sources .source-map-stage { position: relative; inset: auto; display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; padding: 3.5rem .8rem 2.5rem; }.is-sources .source-orbit { position: relative; grid-column: 1 / -1; left: auto; top: auto; width: 76px; height: 76px; margin: 0 auto .4rem; transform: none; }.is-sources .source-card { position: relative; inset: auto; white-space: normal; text-align: center; }.is-sources .illustration-note { bottom: .65rem; font-size: .58rem; }.rag-illustration:has(.flow-illustration) { min-height: 0; overflow: visible; }.rag-illustration .flow-illustration { position: relative; inset: auto; padding: 4.2rem 1.2rem 1rem; }.rag-illustration .flow-track { flex-direction: column; width: auto; min-width: 0; padding: .25rem 0; gap: .15rem; }.rag-illustration .flow-track span { flex: 0 0 auto; width: 100%; white-space: normal; text-align: left; }.rag-illustration .flow-track b { transform: rotate(90deg); line-height: 1; }.rag-illustration .flow-illustration .illustration-note { margin-top: .6rem; text-align: center; }.is-rag-basics { min-height: 0; padding: 4.2rem 1rem 1rem; }.memory-scene { grid-template-columns: 1fr; gap: .55rem; }.memory-model, .memory-library { min-height: 0; padding: .8rem; }.memory-orb { width: 62px; height: 62px; }.memory-question { min-height: 0; }.memory-caption { grid-column: auto; flex-direction: column; gap: .25rem; text-align: center; font-size: .58rem; }.extract-scene { grid-template-columns: 1fr; gap: .4rem; }.extract-table, .extract-output { min-height: 0; }.extract-lens { grid-template-columns: auto auto; }.extract-lens b { transform: rotate(90deg); }.is-extract-structure { min-height: 470px; }.search-comparison { grid-template-columns: 1fr; }.is-search-modes { min-height: 440px; }.search-field { min-height: 145px; }.is-hnsw-layers { min-height: 340px; }.hnsw-layer { min-height: 78px; }.is-ivf-pq { min-height: 440px; }.ivf-scene { grid-template-columns: 1fr; gap: .3rem; }.ivf-space { min-height: 170px; }.ivf-connector { display: flex; justify-content: center; }.ivf-connector b { transform: rotate(90deg); }.pq-strip { min-height: 115px; }.recursive-ladder { grid-template-columns: 1fr; gap: .2rem; }.recursive-step { min-height: 0; }.recursive-arrow { line-height: 1; transform: rotate(90deg); }.is-recursive-flow { min-height: 440px; } }
+</style>

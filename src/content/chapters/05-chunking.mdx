@@ -1,0 +1,244 @@
+---
+title: Chunking
+description: How documents become retrieval units without losing the context that makes them useful.
+order: 5
+status: complete
+toc:
+  - Why chunking exists
+  - What makes a useful chunk
+  - Chunking strategies
+  - Chunk configuration
+  - Retrieval chunks and generation context
+  - Failure modes
+  - Where chunking sits in the pipeline
+  - References
+---
+
+## Why chunking exists
+
+Retrieval usually does not search an entire book, repository, or policy manual as one indivisible object. It searches smaller units and selects the units that appear relevant to a query.
+
+Chunking is the process of dividing a prepared document into those units. It exists because whole-document retrieval is often too coarse, while arbitrarily small fragments lose the context needed to interpret an answer.
+
+There are three competing goals:
+
+- **precision:** a retrieved unit should focus on the question rather than unrelated material;
+- **context:** the unit should contain enough surrounding information to be understood; and
+- **traceability:** the unit should remain connected to its source, location, and document version.
+
+The right chunk is not a universal number of characters or tokens. It depends on the source structure, the questions people ask, the embedding model, the retrieval method, and how much context the generation stage can use.
+
+### Whole documents are often too coarse
+
+If a 200-page manual is one retrieval item, a query about password rotation competes with every unrelated section in the manual. The embedding represents a mixture of topics. Even if the manual is retrieved, the answer-producing stage receives too much irrelevant material.
+
+Whole-document retrieval can still be appropriate when documents are short, when the document itself is the unit of access, or when the task needs global context. Chunking is a design choice, not a law that every source must obey.
+
+### Tiny fragments are often too weak
+
+A fragment such as “30 days” does not identify what the number means. Its heading, subject, unit, exception, or scope may be several sentences away. Small chunks can improve topical precision while making the retrieved text ambiguous.
+
+This is why chunking is an information-boundary problem. The splitter must decide which nearby text belongs together.
+
+<RagIllustration kind="chunking" />
+
+## What makes a useful chunk
+
+A useful chunk usually has a recognizable topic, enough local context to stand on its own, and metadata that explains where it came from. Its boundaries should follow the source's structure when that structure is meaningful.
+
+### Semantic boundaries
+
+Good boundaries often occur at:
+
+- a section or subsection boundary;
+- a paragraph boundary;
+- a list boundary;
+- a complete table row or table group;
+- a function, class, or configuration block in code; or
+- a time window in audio or video.
+
+These boundaries are not always available. A long legal clause may need to be split, and a very short paragraph may need to be combined with its heading or neighboring paragraph.
+
+### Headings are context
+
+The text of a heading often changes the meaning of the paragraph below it. A chunk should commonly inherit its heading path as metadata or as a small contextual prefix:
+
+<CodeExample kind="chunk-context" />
+
+This gives the retriever and the generator useful context without requiring every chunk to contain the entire document hierarchy. The original text and the added context should remain distinguishable so citations point to the real source.
+
+### Chunk identity
+
+Each chunk should have a stable identity derived from the document identity, version, location, and chunking configuration. A conceptual record might look like:
+
+<CodeExample kind="chunk-record" />
+
+If chunk size or boundaries change, the chunking version should change too. Otherwise old and new chunks can be confused during updates and evaluation.
+
+## Chunking strategies
+
+Different strategies preserve different kinds of structure. They can also be combined: a document may first be split by sections, then long sections may be split by paragraphs or tokens.
+
+### Fixed-size chunking
+
+Fixed-size chunking divides text into equal character or token windows. It is simple, predictable, and works as a baseline for many sources.
+
+Its weakness is boundary blindness. A window may end halfway through a sentence, separate a heading from its explanation, or cut a table and code block in the middle. Character counts are also not the same as model tokens, especially across languages and code.
+
+### Character-based chunking
+
+Character limits are easy to implement and do not require the embedding model's tokenizer. A character limit can be useful for controlling storage or keeping input sizes bounded, but it is only an indirect approximation of the model's actual context budget.
+
+Character splitting should usually prefer a list of separators—paragraphs before lines, lines before spaces, and spaces before individual characters—rather than slicing every string at the same position.
+
+### Token-based chunking
+
+Token-based chunking measures the representation used by a model's tokenizer. This makes the limit more meaningful for context budgets, but tokenizer behavior varies by model and language. A chunk that fits one embedding model's token limit may not fit another model's limit.
+
+Token limits are constraints, not quality targets. Filling every chunk to the maximum can combine unrelated paragraphs and reduce retrieval precision.
+
+### Recursive character splitting
+
+Recursive splitting tries larger semantic separators first and falls back to smaller separators only when a piece is still too large. A typical priority is:
+
+<RagIllustration kind="recursive-flow" />
+
+The important idea is not the particular library implementation. It is the preference ordering: preserve a larger boundary when possible, and make a smaller cut only when necessary.
+
+### Sentence-level chunking
+
+Sentence chunking uses sentence boundaries to avoid cutting through grammatical units. It can work well for prose and makes chunks easy to inspect. It is less reliable for code, tables, bullet-heavy documents, transcripts, and text with unusual punctuation.
+
+Sentence boundaries also do not guarantee semantic completeness. A sentence can depend on a definition in the previous paragraph or on a condition several sentences later.
+
+### Paragraph and section-aware chunking
+
+Structure-aware chunking starts from the document's own hierarchy. It may keep a section as one chunk if it is short, or split a long section while attaching the section path to every child.
+
+This often produces more interpretable chunks than blind windows, but it relies on extraction preserving headings and boundaries. A malformed document can make a structure-aware algorithm confidently follow the wrong hierarchy.
+
+### Semantic chunking
+
+Semantic chunking attempts to split when the subject changes rather than at a fixed length. One conceptual approach compares representations of neighboring sentences and places a boundary where their relationship changes sharply.
+
+This can produce coherent sections, but it adds computation and depends on the representation used to detect the change. It can also create chunks that are semantically coherent but too small, too large, or poorly aligned with the questions users ask. Semantic coherence is a useful signal, not a proof that a boundary is correct.
+
+### Parent-child chunking
+
+Parent-child designs maintain two levels:
+
+- smaller child chunks are used for precise retrieval;
+- a parent section or document region supplies broader context after a child matches.
+
+This separates retrieval granularity from generation context. It also requires careful identity and deduplication rules: several matching children from the same parent should not expand into repeated copies of the same text.
+
+### Code-aware chunking
+
+Source code has syntax, scope, imports, comments, and references that ordinary prose splitters do not understand. Useful boundaries include files, modules, classes, functions, configuration blocks, and test cases.
+
+A code chunk should preserve its file path, language, symbol name, and relevant surrounding declarations. Splitting a function from its signature or a configuration key from its enclosing section can make a retrieved snippet difficult to use even when the matching line is present.
+
+## Chunk configuration
+
+### Chunk size
+
+Chunk size controls the amount of text in each retrieval unit. Increasing it usually provides more local context but mixes more topics. Decreasing it can improve focus but increases the risk that definitions, qualifications, or answer-bearing sentences are separated.
+
+The useful unit is measured in the representation that matters at the next stage. If generation has a strict token budget, token counts matter. If the source contains tables or code, structural boundaries may matter more than a precise count.
+
+### Overlap
+
+Overlap repeats a boundary region in neighboring chunks. It can reduce the chance that an answer split across a boundary is absent from both chunks. It also increases storage, indexing work, duplicate retrievals, and the chance that one passage dominates the final context.
+
+Overlap is not a substitute for meaningful boundaries. If the split separates a heading from its scope, repeating the last few words may not repair the lost relationship. A better approach may be to attach the heading path or use a parent section.
+
+### Separators and boundaries
+
+Separators should be selected for the source type. Paragraph and heading separators are useful for prose; blank lines and syntax boundaries are useful for code; row and column boundaries are important for tables; timestamps and speaker turns matter for conversations.
+
+A splitter should record what boundary rule created a chunk. That makes experiments comparable and helps explain why a particular answer was or was not retrieved.
+
+### Metadata inheritance
+
+Every child chunk should inherit enough metadata to remain meaningful:
+
+- source and document IDs;
+- title and heading path;
+- page, section, line, or timestamp location;
+- version and effective date;
+- language and document type; and
+- access or tenant constraints.
+
+Metadata should not silently become part of the searchable text if it could create false matches. Conversely, metadata needed for filtering must be stored in a form the retrieval system can actually use.
+
+### A chunking decision record
+
+Before comparing chunking choices, write down the decision:
+
+<RagIllustration kind="decision-record" />
+
+This is more useful than saying “we use recursive splitting.” The name of a strategy does not describe its separators, limits, overlap, metadata, or fallback behavior.
+
+## Retrieval chunks and generation context
+
+The best unit for retrieval is not always the best unit for generation. A small child can match a query precisely while its parent section contains the qualifications needed to answer correctly.
+
+The flow can therefore look like this:
+
+<RagIllustration kind="context-flow" />
+
+Expansion must be bounded. If every child match expands to an entire document, the system returns to whole-document retrieval and exhausts the context budget. It also needs deduplication so adjacent matches do not repeat the same parent text.
+
+This separation is one reason the pipeline distinguishes retrieved candidates from final context. Retrieval produces evidence candidates. Context construction decides what combination of candidates is actually supplied to the generator.
+
+## Failure modes
+
+### The answer is split across chunks
+
+A definition may appear in one chunk and its exception in the next. Symptoms include incomplete answers, missing caveats, or a model that states a correct-looking rule without the condition that limits it.
+
+Possible responses include preserving larger boundaries, adding heading context, using overlap selectively, or expanding a matching child to its parent.
+
+### Headings are lost
+
+Without a heading path, a chunk containing “it must be renewed every 30 days” may be impossible to interpret. Preserve headings as metadata or contextual prefixes, and test whether the added prefix improves source traceability without creating duplicate noise.
+
+### Chunks are duplicated
+
+Overlap, repeated headers, mirrored web pages, and parent expansion can all create duplicates. Deduplicate both at indexing time and before final context construction. Do not mistake multiple copies for independent evidence.
+
+### Chunks are too small
+
+Tiny chunks increase ambiguity and may match common words without enough context. They can also make the final answer depend on a large number of neighboring lookups.
+
+### Chunks are too large
+
+Large chunks mix topics, dilute similarity, and consume the context budget. A relevant sentence can be present but buried among unrelated text. Long-context models do not make irrelevant context free; experiments have shown that position and surrounding material can affect how well information is used. [Liu et al., “Lost in the Middle”](https://arxiv.org/abs/2307.03172)
+
+### Tables and code are fragmented
+
+Tables lose header-to-value relationships; code loses scope or syntax. Use type-aware boundaries and retain the original source location so a human can inspect the result.
+
+### Overlap becomes excessive
+
+High overlap can inflate the index and cause several top results to be nearly identical. It may also make evaluation appear better because the same answer is repeated across multiple records. Measure unique source coverage, not only the number of returned chunks.
+
+### The chunking configuration changes silently
+
+Changing separators, tokenizer, overlap, or heading-prefix rules changes the index. Store a chunking configuration version and re-index deliberately when it changes. Otherwise a query can compare chunks produced under incompatible assumptions.
+
+## Where chunking sits in the pipeline
+
+Chunking comes after loading and preparation and before embedding:
+
+<RagIllustration kind="chunk-position" />
+
+Preparation decides whether the document representation is usable. Chunking decides which parts become retrieval units. Embedding then maps those units into a numerical representation. A poor chunk cannot be rescued reliably by a stronger embedding model because the required context may never be present in the indexed unit.
+
+Chunking is therefore an interface between document structure and search behavior. It should be evaluated with real question types, source locations, candidate recall, duplicate rate, and final answer usefulness—not by chunk count alone.
+
+## References
+
+- [Lewis et al., “Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks”](https://arxiv.org/abs/2005.11401)
+- [Liu et al., “Lost in the Middle: How Language Models Use Long Contexts”](https://arxiv.org/abs/2307.03172)
+- [LangChain documentation: Text splitters](https://python.langchain.com/docs/concepts/text_splitters/)

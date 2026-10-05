@@ -1,0 +1,144 @@
+---
+title: What is RAG?
+description: Why retrieval is introduced and what it can—and cannot—guarantee.
+order: 1
+status: complete
+toc:
+  - The problem RAG addresses
+  - Why retrieval is introduced
+  - The basic RAG loop
+  - What RAG does not guarantee
+  - When RAG is useful
+  - Terminology to carry forward
+  - References
+---
+
+## The problem RAG addresses
+
+Language models learn statistical patterns from their training data. That gives them a **parametric memory**: knowledge encoded in the model's parameters. The memory can be broad and useful, but it is not a live database. It may be incomplete, difficult to update, difficult to inspect, and poorly suited to private material.
+
+The original RAG paper framed the complementary alternative as **non-parametric memory**: an external collection that can be searched and supplied to the generator at answer time. Its model combined a sequence-to-sequence generator with a dense index and retriever over Wikipedia. [Lewis et al., 2020](https://arxiv.org/abs/2005.11401)
+
+Modern RAG systems often use a simpler architecture than that research model, but the underlying idea is the same:
+
+> retrieve relevant external evidence, then generate with that evidence in view.
+
+## Parametric knowledge and external knowledge
+
+It helps to separate three things that are often collapsed into the word “knowledge.”
+
+| Kind | Where it lives | Typical strength | Typical weakness |
+| --- | --- | --- | --- |
+| Parametric knowledge | Model parameters | Broad language and world knowledge | Hard to inspect or update precisely |
+| External knowledge | Documents, records, or indexes | Updatable, domain-specific, attributable | Must be loaded, searched, and kept correct |
+| Prompt context | The current input | Directly visible to the model for this request | Limited by context size and selection quality |
+
+RAG connects the second and third rows: an external collection is searched, and selected material is placed into the prompt context. Retrieval does not rewrite the model's parameters.
+
+## Why retrieval is introduced
+
+RAG becomes useful when the answer depends on information that is:
+
+- newer than the model's training data;
+- private or specific to an organization;
+- too large to paste into every prompt;
+- easier to verify when the original source is preserved; or
+- updated independently of the model.
+
+Retrieval also makes the system's evidence path explicit. A system can retain the source, page, record, or chunk that supported a response. That creates an opportunity for traceability, but it does not make citations automatically correct: the retrieved material can be irrelevant or wrong, and the model can still misuse it.
+
+## The basic RAG loop
+
+At a high level, a RAG request has four conceptual steps:
+
+1. **Represent the question** in a form suitable for search.
+2. **Retrieve candidates** from an external collection.
+3. **Construct context** by selecting, ordering, and formatting useful candidates.
+4. **Generate an answer** using the question and supplied context.
+
+The collection must first be prepared. Documents are loaded, cleaned, divided into retrievable units, represented for search, and placed into an index. Later chapters call this the **indexing path**. The four request-time steps form the **query path**.
+
+<RagIllustration kind="rag-basics" />
+
+The diagram is intentionally incomplete on details such as reranking and filtering. Those are separate mechanisms, not synonyms for “the vector database.”
+
+## RAG is not ordinary search
+
+Ordinary search usually returns a ranked set of documents, passages, or links for a person to inspect. RAG adds a generation stage: the retrieved material becomes input to a language model that synthesizes a response.
+
+That changes both the benefit and the risk. Search exposes the result list directly. RAG can explain, summarize, or combine passages, but it can also produce a confident answer that is not fully supported by the retrieved evidence. A useful mental model is:
+
+```text
+search = find and rank evidence
+RAG    = find evidence + construct context + generate a response
+```
+
+## RAG is not prompt-only context
+
+In a prompt-only system, a developer or user manually supplies the relevant context. This can work for a small, stable set of instructions. It becomes awkward when the source collection is large, frequently changing, or different for every question.
+
+RAG automates the selection step. That automation introduces its own failure modes: the right document may not be retrieved, the right passage may be ranked too low, or useful evidence may be discarded while constructing the final context.
+
+## RAG is not fine-tuning
+
+Fine-tuning changes model parameters by training on examples. RAG leaves the generator unchanged during the request and supplies external evidence through the input.
+
+| Question | RAG | Fine-tuning |
+| --- | --- | --- |
+| Where does new information enter? | Retrieved context | Updated parameters |
+| How quickly can a source be changed? | Usually by updating the collection and index | Requires another training process |
+| Is the source visible at answer time? | Potentially, if provenance is retained | Not necessarily |
+| What is it best suited to change? | Access to facts and documents | Behavior, format, or task patterns |
+
+The two approaches can be combined, but neither automatically solves the other's problem. A fine-tuned model can still lack current documents, and a RAG system can still follow instructions poorly or synthesize unsupported claims.
+
+## RAG is not a replacement for long-context prompting
+
+A long-context model can accept more input, but a larger input does not remove the need to decide what belongs in that input. Context has costs: processing, latency, token limits, and attention that may be uneven across positions.
+
+The *Lost in the Middle* study found that models could perform worse when relevant information was placed in the middle of long inputs than when it appeared near the beginning or end. The result does not mean every long-context model behaves identically, but it is a useful warning against treating “fits in the context window” as equivalent to “will be used reliably.” [Liu et al., 2023](https://arxiv.org/abs/2307.03172)
+
+RAG and long-context prompting are therefore design choices that can be combined. Retrieval can reduce a large collection to a focused context; long context can make it possible to include more surrounding material when the question needs it.
+
+## What RAG does not guarantee
+
+RAG improves the route by which evidence can reach a model. It does not guarantee:
+
+- that the source collection contains the answer;
+- that loading and cleaning preserved the answer;
+- that retrieval found the relevant passage;
+- that the highest-scoring passage is actually relevant;
+- that the evidence is accurate, current, or authorized for the user;
+- that the final context fits without harmful trimming;
+- that the model will follow the grounding instruction; or
+- that a generated citation points to the claim it appears to support.
+
+The key distinction is between **access to evidence** and **truth of an answer**. RAG can make evidence available. The rest of the pipeline must still select, preserve, interpret, and evaluate it.
+
+## When RAG is useful
+
+RAG is a strong candidate when the answer depends on a collection that is external to the model and can be searched meaningfully. Examples include internal policies, product documentation, support articles, research collections, and versioned technical references.
+
+RAG may be unnecessary when the task is purely generative, the required information is already supplied in a short prompt, or the collection is so small and stable that manual context selection is clearer than building retrieval machinery.
+
+The right question is not “Can we add retrieval?” It is:
+
+> Would a searchable external source improve this answer, and can we preserve enough provenance to evaluate the result?
+
+## Terminology to carry forward
+
+- **Retriever:** the component that searches the prepared collection.
+- **Candidate:** a retrieved item that may or may not enter the final context.
+- **Context:** the selected and formatted material passed to the generator.
+- **Grounding:** constraining or evaluating an answer against supplied evidence.
+- **Provenance:** information about where a piece of content came from.
+- **Parametric memory:** information encoded in model parameters.
+- **Non-parametric memory:** information stored outside the model and accessed through a retrieval mechanism.
+
+Later chapters will unpack each term. Keeping them separate prevents a common conceptual error: treating retrieval results as if they were already a trustworthy final answer.
+
+## References
+
+- [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks — Lewis et al. (2020)](https://arxiv.org/abs/2005.11401)
+- [REALM: Retrieval-Augmented Language Model Pre-Training — Guu et al. (2020)](https://arxiv.org/abs/2002.08909)
+- [Lost in the Middle: How Language Models Use Long Contexts — Liu et al. (2023)](https://arxiv.org/abs/2307.03172)

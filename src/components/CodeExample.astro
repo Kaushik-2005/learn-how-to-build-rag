@@ -1,0 +1,73 @@
+---
+interface Props { kind: 'document' | 'quality' | 'chunk-context' | 'chunk-record'; title?: string; language?: string; }
+const { kind, title = 'DOCUMENT SHAPE', language = 'JSON' } = Astro.props;
+---
+
+{kind === 'document' && <div class="code-example" aria-label={`${title} ${language} example`}>
+  <div class="code-header"><span>{title}</span><span>{language}</span></div>
+  <div class="code-body">
+    <pre><code><span class="punct">&#123;</span>
+  <span class="key">&quot;content&quot;</span><span class="punct">:</span>        <span class="string">&quot;extracted text or structured representation&quot;</span><span class="punct">,</span>
+  <span class="key">&quot;metadata&quot;</span><span class="punct">:</span>       <span class="string">&quot;fields useful for filtering and interpretation&quot;</span><span class="punct">,</span>
+  <span class="key">&quot;source&quot;</span><span class="punct">:</span>         <span class="string">&quot;human-readable source reference&quot;</span><span class="punct">,</span>
+  <span class="key">&quot;document_id&quot;</span><span class="punct">:</span>    <span class="string">&quot;stable identity for the source item&quot;</span><span class="punct">,</span>
+  <span class="key">&quot;location&quot;</span><span class="punct">:</span>       <span class="string">&quot;page, section, row, line, or timestamp&quot;</span><span class="punct">,</span>
+  <span class="key">&quot;extracted_at&quot;</span><span class="punct">:</span>   <span class="string">&quot;when this version was loaded&quot;</span><span class="punct">,</span>
+  <span class="key">&quot;source_version&quot;</span><span class="punct">:</span> <span class="string">&quot;commit, revision, updated-at, or snapshot identifier&quot;</span>
+<span class="punct">&#125;</span></code></pre>
+  </div>
+</div>}
+
+{kind === 'quality' && <div class="code-example" aria-label="Preparation quality signals example">
+  <div class="code-header"><span>PREPARATION QUALITY</span><span>RECORD</span></div>
+  <div class="quality-body">
+    <div><span class="key">extraction_status</span><span class="punct">:</span><span>complete | partial | failed</span></div>
+    <div><span class="key">ocr_used</span><span class="punct">:</span><span>true | false</span></div>
+    <div><span class="key">text_length</span><span class="punct">:</span><span>18420</span></div>
+    <div><span class="key">heading_count</span><span class="punct">:</span><span>27</span></div>
+    <div><span class="key">table_count</span><span class="punct">:</span><span>4</span></div>
+    <div><span class="key">replacement_character_count</span><span class="punct">:</span><span>0</span></div>
+    <div><span class="key">duplicate_group</span><span class="punct">:</span><span>group-17</span></div>
+    <div><span class="key">review_status</span><span class="punct">:</span><span>sampled | reviewed | unreviewed</span></div>
+  </div>
+</div>}
+
+{kind === 'chunk-context' && <div class="code-example" aria-label="Chunk heading context example">
+  <div class="code-header"><span>CHUNK CONTEXT</span><span>EXAMPLE</span></div>
+  <div class="quality-body">
+    <div><span class="key">Document</span><span class="punct">:</span><span>Access policy</span></div>
+    <div><span class="key">Section</span><span class="punct">:</span><span>Service accounts &gt; Rotation</span></div>
+    <div class="record-gap"><span></span><span></span><span></span></div>
+    <div><span class="key">Text</span><span class="punct">:</span><span>Service account credentials must be rotated every 30 days...</span></div>
+  </div>
+</div>}
+
+{kind === 'chunk-record' && <div class="code-example" aria-label="Chunk identity record example">
+  <div class="code-header"><span>CHUNK IDENTITY</span><span>RECORD</span></div>
+  <div class="quality-body">
+    <div><span class="key">chunk_id</span><span class="punct">:</span><span>policy-v7:section-3:chunk-02</span></div>
+    <div><span class="key">document_id</span><span class="punct">:</span><span>policy-v7</span></div>
+    <div><span class="key">parent_section</span><span class="punct">:</span><span>Access policy &gt; Rotation</span></div>
+    <div><span class="key">text</span><span class="punct">:</span><span>...</span></div>
+    <div><span class="key">page_start</span><span class="punct">:</span><span>4</span></div>
+    <div><span class="key">page_end</span><span class="punct">:</span><span>5</span></div>
+  </div>
+</div>}
+
+<style>
+  .code-example { margin: 2rem 0; background: var(--surface); border: 1px solid var(--line); border-left: 2px solid var(--accent); }
+  .code-header { display: flex; align-items: center; justify-content: space-between; padding: .7rem 1rem; border-bottom: 1px solid var(--line); color: var(--ink-muted); font: .62rem Consolas, monospace; letter-spacing: .13em; }
+  .code-header span:last-child { color: var(--accent); }
+  .code-body { min-width: 0; overflow: hidden; padding: 1.35rem 1.6rem 1.5rem; }
+  .code-body pre { margin: 0; padding: 0; overflow: visible; border: 0; background: transparent; box-shadow: none; }
+  .code-body code { color: var(--ink); font: .92rem/1.9 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .quality-body { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); column-gap: 1ch; row-gap: .18rem; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; padding: 1.35rem 1.6rem 1.5rem 2.35rem; color: var(--ink); font-family: Consolas, 'SFMono-Regular', monospace; font-size: .9rem; line-height: 1.9; }
+  .quality-body > div:not(.record-gap) { display: contents; }
+  .quality-body > div.record-gap { grid-column: 1 / -1; min-height: .8rem; }
+  .quality-body span { font-family: inherit; }
+  .quality-body .key { white-space: nowrap; color: var(--accent); }
+  .quality-body > div > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .quality-body .punct { color: #93897b; }
+  .key { color: var(--accent); }.string { color: #4f4a42; }.punct { color: #93897b; }
+  @media (max-width: 700px) { .code-body, .quality-body { padding: 1.1rem; }.code-body code, .quality-body { font-size: .78rem; }.quality-body { grid-template-columns: max-content max-content minmax(0, 1fr); } }
+</style>

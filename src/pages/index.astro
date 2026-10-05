@@ -1,0 +1,63 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import KnowledgeIllustration from '../components/KnowledgeIllustration.astro';
+import { getCollection } from 'astro:content';
+
+const chapters = (await getCollection('chapters')).sort((a, b) => a.data.order - b.data.order);
+const parts = [
+  { from: 1, to: 4, title: 'Pipeline foundation', blurb: 'Start with the problem, architecture, sources, and preparation.' },
+  { from: 5, to: 7, title: 'Indexing fundamentals', blurb: 'Understand chunking, embeddings, and vector indexes.' },
+  { from: 8, to: 12, title: 'Query-time retrieval', blurb: 'Follow a question through processing, retrieval, reranking, and context.' },
+  { from: 13, to: 15, title: 'Generation and evaluation', blurb: 'Connect evidence to answers and learn how to measure the system.' },
+  { from: 16, to: 17, title: 'Advanced and production topics', blurb: 'Extend the basic pipeline and reason about operating it.' }
+].map((part) => ({
+  ...part,
+  chapters: chapters.filter((chapter) => chapter.data.order >= part.from && chapter.data.order <= part.to)
+}));
+---
+
+<Base title="RAG From First Principles" description="A theory-first guide to Retrieval-Augmented Generation.">
+  <SiteHeader />
+  <main class="home" id="main">
+    <section class="hero">
+      <p class="eyebrow">A theory-first learning reference</p>
+      <h1>Understand the system beneath the RAG framework.</h1>
+      <p class="lede">Follow the complete path from source documents to grounded answers, with the mechanisms, trade-offs, and failure modes made explicit.</p>
+      <a class="button" href="#chapters">Browse the curriculum &rarr;</a>
+    </section>
+
+    <section class="pipeline" aria-labelledby="pipeline-title">
+      <p class="eyebrow">The mental model</p>
+      <h2 id="pipeline-title">Sources &rarr; Retrieval &rarr; Grounded answer</h2>
+      <p>RAG is a sequence of transformations. Each chapter explains one part of that sequence and how mistakes propagate downstream.</p>
+      <KnowledgeIllustration />
+    </section>
+
+    <section id="chapters" class="parts" aria-labelledby="chapters-title">
+      <div class="curriculum-heading">
+        <p class="eyebrow">Curriculum</p>
+        <h2 id="chapters-title">All chapters</h2>
+        <p class="lede">Read in order to build a complete mental model of the indexing path, query path, and evaluation loop.</p>
+      </div>
+      {parts.map((part) => (
+        <section class="part" aria-labelledby={`part-${part.from}`}>
+          <header class="part-head">
+            <div><h3 id={`part-${part.from}`} class="part-title">{part.title}</h3><p class="part-blurb">{part.blurb}</p></div>
+            <span class="part-range">{String(part.from).padStart(2, '0')}-{String(part.to).padStart(2, '0')}</span>
+          </header>
+          <div class="chapter-grid">
+            {part.chapters.map((chapter) => (
+              <a class="chapter-card" href={`/chapters/${chapter.id}`}>
+                <span class="chapter-number">{String(chapter.data.order).padStart(2, '0')}</span>
+                <h3>{chapter.data.title}</h3>
+                <p>{chapter.data.description}</p>
+                <span class:list={['status', chapter.data.status === 'complete' && 'is-complete']}>{chapter.data.status}</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+    </section>
+  </main>
+</Base>

@@ -1,0 +1,197 @@
+---
+title: Document Cleaning and Preparation
+description: How loaded material becomes trustworthy, traceable input for chunking and retrieval.
+order: 4
+status: complete
+toc:
+  - The problem with loaded text
+  - Cleaning without destroying meaning
+  - OCR and structure preservation
+  - Duplicates and near-duplicates
+  - Privacy, quality, and provenance
+  - Where preparation ends
+  - References
+---
+
+## The problem with loaded text
+
+Loading gives us a representation of a source. It does not give us a good retrieval document.
+
+A PDF loader may return repeated headers, broken line endings, page numbers in the middle of sentences, and a table whose columns have been flattened into an ambiguous sequence. An HTML loader may include navigation, cookie notices, comments, and duplicated mobile markup. An OCR system may turn a scan into searchable text while confusing `O` with `0` or silently dropping a column.
+
+The retrieval system cannot see the original page in the same way a person can. It sees the prepared representation that we give it. If preparation removes a heading, joins two unrelated columns, or keeps the same paragraph twenty times, later embedding and retrieval stages inherit that defect.
+
+The purpose of preparation is therefore not to make text look tidy. It is to produce a representation that is:
+
+- **searchable:** meaningful words and identifiers are available to retrieval;
+- **structured:** relationships such as headings, rows, pages, and timestamps are not unnecessarily destroyed;
+- **traceable:** every passage can be connected back to a source location and version; and
+- **safe to use:** sensitive material and access metadata are handled deliberately.
+
+Cleaning is a lossy transformation. The central question is not “How do we remove everything that looks unusual?” It is “Which irregularities are noise, and which carry meaning?”
+
+<RagIllustration kind="cleaning" />
+
+## Cleaning without destroying meaning
+
+### Decode before you normalize
+
+Text first has to be interpreted as characters. A byte sequence decoded with the wrong encoding can create replacement characters, mojibake, or missing symbols. That corruption is different from ordinary punctuation variation: once the original bytes are lost, later cleanup usually cannot reconstruct the intended text.
+
+After decoding, Unicode normalization can make canonically equivalent text comparable. The Unicode Standard describes NFC, NFD, NFKC, and NFKD forms; compatibility forms can erase distinctions, so they should not be applied blindly to arbitrary text. Use the least aggressive transformation that supports the retrieval task. [Unicode Standard Annex #15](https://www.unicode.org/reports/tr15/)
+
+For example, normalizing line endings and Unicode composition is usually low risk. Converting every symbol to ASCII is not: it can remove accents, mathematical notation, non-Latin scripts, or distinctions that matter in identifiers.
+
+### Remove presentation noise, not semantic signals
+
+Common low-value artifacts include:
+
+- repeated HTML navigation and footer text;
+- cookie banners and boilerplate notices;
+- isolated page numbers;
+- repeated running headers and footers;
+- empty lines produced by layout rather than meaning; and
+- invisible control characters that do not represent content.
+
+The same-looking string can have different meanings depending on location. A number at the bottom of every page may be a page number; a number beside a product name may be part of an identifier. Removal should use layout, repetition, position, and document type—not a global rule such as “delete every line containing only digits.”
+
+Whitespace normalization is similarly contextual. Collapsing multiple spaces in prose is usually harmless. Collapsing whitespace inside preformatted code, a fixed-width table, or an aligned mathematical expression can change the meaning.
+
+### Keep a raw and a prepared representation
+
+Preparation should normally produce a new representation rather than overwrite the only copy.
+
+<RagIllustration kind="prep-flow" />
+
+The raw source supports reprocessing when the cleaner improves. The extracted representation helps diagnose loader failures. The prepared representation is the version sent to chunking. Keeping these stages separate makes it possible to answer: “Did the source lack this fact, did extraction lose it, or did cleaning remove it?”
+
+## OCR and structure preservation
+
+### OCR is extraction with uncertainty
+
+An image or scanned PDF contains pixels, not directly searchable characters. OCR estimates text and often provides layout information such as bounding boxes, lines, or blocks. It can be essential, but it is not a neutral conversion: recognition errors become plausible-looking retrieval text.
+
+Tesseract's documentation emphasizes image quality, rescaling, binarization, deskewing, page segmentation, and table handling as factors that affect output quality. These are preprocessing and configuration choices, not guarantees of correctness. [Tesseract: Improving the quality of the output](https://github.com/tesseract-ocr/tessdoc/blob/main/ImproveQuality.md)
+
+An OCR-aware preparation flow should preserve:
+
+1. the original image or scanned page;
+2. the OCR text;
+3. the OCR engine and language configuration;
+4. page and bounding-box information when available; and
+5. a quality signal or review status.
+
+The text `account number 1008` and `account number 100B` may look equally fluent, but they lead to different retrieval results. Quality checks should sample OCR output and compare important fields against the page image where the cost of an error is high.
+
+### Tables are structure, not decorative whitespace
+
+Flattening a table into a paragraph can detach a value from its header. Consider:
+
+| Region | Limit |
+| --- | ---: |
+| Europe | 50 |
+| Asia | 80 |
+
+The useful unit is not only the sequence `Europe 50 Asia 80`. It is the relationship between each value and the `Region` and `Limit` columns. A prepared representation can retain a table structure, serialize each row with its headers, or store both a readable rendering and machine-readable fields.
+
+The correct choice depends on downstream use. A human-readable row is useful for a language model; normalized fields are useful for metadata filters; the original table is important for auditability. There is no universal serialization that preserves every property equally well.
+
+### Preserve boundaries that help later retrieval
+
+Preparation should retain boundaries that chunking will need:
+
+- document title and section headings;
+- page, slide, or line ranges;
+- list nesting and item boundaries;
+- code language and file path;
+- table names, column names, and row boundaries;
+- timestamps for messages, audio, and video; and
+- captions and labels for figures.
+
+If all of these are reduced to one undifferentiated text string, chunking has fewer safe places to split and retrieval loses useful context.
+
+## Duplicates and near-duplicates
+
+Duplicate material wastes storage, inflates retrieval results, and can make repeated evidence appear more authoritative than it is. It also makes evaluation misleading: retrieving three copies of one passage is not the same as retrieving three independent sources.
+
+### Exact duplicates
+
+After a carefully defined canonicalization step, exact duplicate detection can compare a content hash. The canonicalization must be recorded because changing whitespace, case, or punctuation changes what counts as “the same.” Do not use a broad canonicalization that erases meaningful identifiers merely to increase the duplicate count.
+
+### Near-duplicates
+
+Near-duplicates differ by small edits: a refreshed web page, a PDF with a new cover page, or the same policy copied into several repositories. Comparing every pair of documents is expensive at scale.
+
+MinHash provides an intuition for a cheaper approach. Represent a document by sets of shingles—usually contiguous word or character sequences—and compute a compact signature whose matching components estimate Jaccard similarity. Similar documents tend to share similar signatures, so a system can first generate likely pairs and then verify them with a more exact comparison. The original resemblance and containment formulation is described by Broder. [Broder, “On the Resemblance and Containment of Documents”](https://www.cs.princeton.edu/courses/archive/spring13/cos598C/broder97resemblance.pdf)
+
+MinHash is a candidate-generation technique, not a final truth judgment. A shared boilerplate section can make unrelated documents look similar. A small edit to a critical sentence may leave the documents highly similar while changing the answer to a question. Near-duplicate policies should therefore consider document type, version, source authority, and the parts that changed.
+
+### Choose a surviving version deliberately
+
+When near-duplicates are found, possible policies include:
+
+- keep the newest version;
+- keep the source with the strongest authority;
+- keep all versions and attach effective dates;
+- merge only shared boilerplate; or
+- retain one retrieval copy while preserving every original for provenance.
+
+There is no safe universal rule. A historical question may require an older version, while a current policy question may require the latest effective version.
+
+## Privacy, quality, and provenance
+
+### PII handling is a policy decision
+
+Personally identifiable information can be identifying on its own or when combined with other information. NIST's guide distinguishes the sensitivity and context of PII rather than treating every field as equally risky. [NIST SP 800-122](https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-122.pdf)
+
+Before indexing sensitive material, decide whether each field should be:
+
+- removed;
+- masked or pseudonymized;
+- retained only in a protected access-controlled store;
+- retained in retrieval text but excluded from generated answers; or
+- retained because it is necessary for the legitimate use case.
+
+Scrubbing names, emails, phone numbers, or account identifiers can improve privacy while damaging retrieval if those values are the exact things users search for. Reversible pseudonyms can preserve joinability, but the mapping becomes sensitive data itself. Prompt instructions are not an access-control mechanism; permissions must be enforced before content reaches retrieval and context construction.
+
+### Quality scoring should expose uncertainty
+
+A preparation quality record can contain signals such as:
+
+<CodeExample kind="quality" />
+
+These fields do not prove that a document is correct. They make suspicious documents visible for review and allow later evaluation to separate “the answer was not present” from “the answer was lost during preparation.” Quality scores should be treated as diagnostic signals, not as a universal ranking of document truth.
+
+### Identity and provenance travel with the text
+
+Every prepared document should have stable identity fields appropriate to its source:
+
+- **document ID:** identity of the logical document;
+- **source ID:** the system, repository, URL, mailbox, or database that supplied it;
+- **version:** revision, commit, publication date, or effective date;
+- **location:** page, section, row, line range, timestamp, or URL fragment;
+- **permissions:** the access scope that must be checked before retrieval; and
+- **processing record:** loader, cleaner, OCR settings, and preparation time.
+
+These fields are not decorative metadata. They support deduplication, incremental updates, access decisions, citations, debugging, and reproducibility. A chunk without a reliable source identity may still be semantically similar to a query, but it cannot support a trustworthy answer trace.
+
+The preparation path is illustrated above: raw material is decoded, cleaned, checked, and given identity and provenance before it reaches chunking.
+
+## Where preparation ends
+
+Preparation ends when a document has a deliberate text representation, preserved structure, reviewed metadata, and a clear provenance link. It does not decide how many retrieval units to create. That is the next stage: **chunking**.
+
+The boundary matters:
+
+- cleaning asks whether the document representation is usable;
+- chunking asks where that representation should be divided for retrieval; and
+- embedding asks how each retrieval unit should be represented numerically.
+
+If preparation is incomplete, chunking may hide the original defect by producing many clean-looking fragments. A strong pipeline keeps enough artifacts to find the earliest stage where useful evidence disappeared.
+
+## References
+
+- [Unicode Standard Annex #15: Unicode Normalization Forms](https://www.unicode.org/reports/tr15/)
+- [Tesseract documentation: Improving the quality of the output](https://github.com/tesseract-ocr/tessdoc/blob/main/ImproveQuality.md)
+- [Andrei Broder: On the Resemblance and Containment of Documents](https://www.cs.princeton.edu/courses/archive/spring13/cos598C/broder97resemblance.pdf)
+- [NIST SP 800-122: Guide to Protecting the Confidentiality of Personally Identifiable Information](https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-122.pdf)

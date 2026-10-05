@@ -1,0 +1,173 @@
+---
+title: Vector Stores and Vector Indexes
+description: How vector records are stored and searched, from exact comparison to approximate indexes.
+order: 7
+status: complete
+toc:
+  - What is being stored
+  - Exact and approximate search
+  - HNSW
+  - IVF and product quantization
+  - Stores, databases, and indexes
+  - Updates and operational trade-offs
+  - References
+---
+
+## What is being stored
+
+An embedding is only one part of a retrieval record. A useful conceptual record contains:
+
+<RagIllustration kind="vector-record" />
+
+The vector supports similarity search. The text and provenance support context construction, citations, debugging, and human inspection. Metadata supports filters and lifecycle operations. Separating these responsibilities helps avoid the mistake of treating a vector as if it were the document itself.
+
+### Vector, embedding, record, store, and index
+
+- A **vector** is a sequence of numeric values.
+- An **embedding** is a vector produced by an embedding model for a particular input.
+- A **vector record** is the vector plus its ID, text/reference, and metadata.
+- A **vector store** persists records and exposes operations such as insert, fetch, filter, and delete.
+- A **vector database** is a storage system with database-like management, indexing, filtering, durability, and operational features.
+- A **vector index** is the data structure and search procedure used to find nearby vectors.
+
+These terms overlap in product names but describe different concepts. A vector store can use a flat exact index or an approximate index. A database can store vectors while delegating search to an index implementation. FAISS, for example, exposes multiple index structures rather than being a complete multi-tenant database. [FAISS index overview](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes)
+
+## Exact and approximate search
+
+### Exact nearest-neighbor search
+
+Given a query vector, exact search compares it with every stored vector, computes the chosen distance or similarity, and returns the best results.
+
+For `N` vectors of dimension `d`, a simple scan does work proportional to `N * d` per query. It is conceptually simple and provides an oracle for evaluating approximate methods. Its cost grows with the number of records.
+
+Exact search can be a good choice for small collections, offline analysis, or evaluation. It is not automatically inferior: avoiding approximation may be more valuable than reducing search work when the corpus is modest or recall is critical.
+
+### Approximate nearest-neighbor search
+
+Approximate nearest-neighbor (ANN) indexes avoid comparing the query with every vector. They organize the space so that search visits a subset of candidates likely to contain the nearest neighbors.
+
+Approximation creates a trade-off. Search becomes faster or less memory-intensive, but the index can miss a true neighbor. The top `k` returned by an ANN index is not a guarantee that it is the exact top `k` under the metric.
+
+Useful evaluation compares ANN results with an exact-search baseline and measures recall at the desired `k`, along with latency, memory, build time, and update behavior.
+
+<RagIllustration kind="search-modes" />
+
+## HNSW
+
+Hierarchical Navigable Small World (HNSW) is a graph-based ANN structure. Each vector is a node connected to selected neighboring nodes. The hierarchy contains sparse upper layers for long-range movement and denser lower layers for local refinement.
+
+The search intuition is similar to entering a map at a coarse scale, moving toward the query region, descending to a more detailed scale, and exploring local neighbors. The graph does not store human concepts or a semantic taxonomy. It stores connections based on vector proximity under the chosen metric.
+
+<RagIllustration kind="hnsw-layers" />
+
+### Search traversal
+
+At query time, the search begins from an entry point in a high layer. It greedily moves toward nodes that are closer to the query, descends through the layers, and maintains a candidate frontier at the lower layer. The search frontier is wider than a single greedy path so it can recover from an early locally attractive choice.
+
+The original HNSW paper describes the hierarchical graph construction and search algorithms. [Malkov and Yashunin, “Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs”](https://arxiv.org/abs/1603.09320)
+
+### Important parameters
+
+- **`M`:** the target number of graph connections per node in a layer. More connections can improve navigability but consume memory and increase construction work.
+- **`efConstruction`:** the size of the candidate exploration set while inserting nodes. A larger value can spend more work selecting connections.
+- **`efSearch`:** the candidate exploration breadth at query time. A larger value generally explores more alternatives and can improve recall at additional query cost.
+
+Exact behavior and defaults vary by implementation. These parameters should be evaluated with the corpus and metric rather than copied as universal settings.
+
+### HNSW trade-offs
+
+HNSW is attractive when high recall and flexible approximate search matter, but it has costs:
+
+- graph links add memory beyond storing the vectors;
+- construction can be expensive;
+- updates and deletions may require tombstones, repair, or rebuild behavior depending on the implementation;
+- filtering can be difficult if the graph was built without awareness of the filter; and
+- approximate search can miss relevant vectors.
+
+HNSW is a search structure, not a guarantee of relevance. A perfect traversal of a poor embedding space still returns poor candidates.
+
+## IVF and product quantization
+
+### IVF: coarse partitioning
+
+Inverted File (IVF) indexing partitions the vector space into cells, often using learned centroids. In a common IVF design, each stored vector is assigned to the inverted list of its nearest coarse centroid; multi-assignment variants can associate a vector with more than one list.
+
+At query time, the system first finds the nearest centroids, then searches only the corresponding lists. The number of lists examined is commonly controlled by a probing parameter such as `nprobe`.
+
+The trade-off is direct:
+
+- probing fewer lists reduces work but can miss a vector assigned to an unprobed cell;
+- probing more lists improves candidate coverage but approaches a broader scan.
+
+With **IVF-Flat**, the vectors in the probed lists remain full precision, so distances within those lists are computed directly; results can still miss the global nearest neighbor when its list was not probed. IVF-PQ also compresses the stored vectors, adding quantization error to the list-selection approximation.
+
+FAISS documents IVF as a partitioning approach in which a quantizer assigns vectors to inverted lists, and describes the `nlist` and probing concepts used by its indexes. [FAISS index overview](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes)
+
+### Product quantization
+
+Product Quantization (PQ) compresses vectors by dividing each vector into sub-vectors and replacing each sub-vector with the ID of a nearby codeword from a learned codebook. The full vector is represented by a sequence of compact codes rather than its original floating-point values.
+
+The compressed representation reduces memory and can make distance computation cheaper. It also introduces quantization error: two vectors that were distinct in the original space may become less distinguishable after compression.
+
+PQ is controlled by choices such as:
+
+- the number of sub-vector segments;
+- the number of codewords per segment;
+- how codebooks are trained; and
+- whether residuals or transformations are quantized.
+
+### IVF plus PQ
+
+IVF and PQ address different costs. IVF reduces how many records are searched. PQ reduces how much each record costs to store or compare. They can be combined: IVF chooses a subset of lists, and PQ stores compressed codes within those lists.
+
+The combination creates several interacting approximation choices. A larger probe count can recover candidates lost by coarse partitioning; more precise codes can reduce quantization error but use more memory. The correct configuration is measured against an exact baseline.
+
+<RagIllustration kind="ivf-pq" />
+
+## Stores, databases, and indexes
+
+Representative systems include FAISS, pgvector, Qdrant, Milvus, Weaviate, Pinecone, Chroma, and vector search features in systems such as Elasticsearch or OpenSearch. They differ in persistence, filtering, replication, update behavior, deployment, and which index structures they expose.
+
+The learning objective is not to rank vendors. When comparing a system, ask:
+
+- Which metrics and dimensions are supported?
+- Are filters applied before or after approximate candidate selection?
+- How are IDs, metadata, and source text stored?
+- What happens on update and deletion?
+- Can the index be rebuilt or migrated?
+- How are snapshots, replication, and failures handled?
+- Can exact search be used as a verification baseline?
+- How are access constraints enforced?
+
+Metadata filtering is particularly important. A vector similarity result must not bypass document permissions. Prompt instructions cannot repair an unauthorized retrieval; access control belongs in the retrieval and storage design.
+
+## Updates and operational trade-offs
+
+### Insertions
+
+Inserting a new vector requires embedding the new chunk, assigning an ID, storing its metadata, and adding it to the index. Some index structures support online insertion naturally; others require training or periodic rebuilding.
+
+### Updates
+
+An updated document may change its text, metadata, embedding, and chunk boundaries. Treating the update as a simple metadata change can leave a vector that represents old text. Stable document IDs plus versioned chunk IDs make replacement explicit.
+
+### Deletions
+
+Deletion may mean removing the vector, marking it unavailable, or removing it from future retrieval while it remains in a storage layer for audit. Approximate indexes can implement deletion with tombstones or delayed compaction. The externally visible guarantee must be documented: “deleted” should not ambiguously mean “still retrievable until a later rebuild.”
+
+### Rebuilds and migrations
+
+Rebuilding may be required after changing the embedding model, dimension, metric, chunking policy, index type, or compression. A rebuild should preserve the mapping from vector IDs to source and permission metadata and should be evaluated before traffic is switched.
+
+### Filters and approximation
+
+A filter such as `department = finance` changes the effective search population. If an ANN index first explores a global graph or a small set of IVF lists and filters afterward, it may return too few permitted candidates even when many valid records exist elsewhere. Filter behavior must be tested as part of retrieval quality, not assumed from unfiltered results.
+
+The index determines how stored vectors are searched. The next chapter begins at the other end of that operation: interpreting and preparing the user's query so the retriever searches for the right thing.
+
+## References
+
+- [FAISS: Indexes](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes)
+- [Malkov and Yashunin, “Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs”](https://arxiv.org/abs/1603.09320)
+- [Jégou, Douze, and Schmid, “Product Quantization for Nearest Neighbor Search”](https://hal.science/hal-00514462/document)
+- [Johnson, Douze, and Jégou, “Billion-scale similarity search with GPUs”](https://arxiv.org/abs/1702.08734)

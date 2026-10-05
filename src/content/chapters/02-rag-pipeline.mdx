@@ -1,0 +1,221 @@
+---
+title: The Complete RAG Pipeline
+description: The indexing path, query path, artifacts, and provenance that connect the system.
+order: 2
+status: complete
+toc:
+  - The system has two paths
+  - The indexing path
+  - The query path
+  - What moves between stages
+  - A complete mental model
+  - References
+---
+
+## The system has two paths
+
+A RAG system is easier to understand when separated into two related workflows:
+
+1. **Indexing or ingestion:** prepare knowledge so it can be searched later.
+2. **Query time:** search that prepared knowledge and use selected evidence to answer a question.
+
+Indexing is usually performed when sources are first added or changed. Query processing happens when a user asks something. The two paths meet at the index and at the source references carried by retrieved items.
+
+<PipelineDiagram />
+
+The “represent” steps are deliberately shown on both paths. Documents and queries must be represented in a compatible way for similarity-based retrieval. Later chapters explain what those representations are and how they are searched.
+
+## The indexing path
+
+### 1. Data source
+
+The source is the collection or system from which knowledge is obtained: a PDF repository, website, database, code repository, wiki, support system, or another collection. It may be the authoritative system of record, but that should be verified rather than assumed. A source is not automatically good retrieval material. It may contain duplicated versions, navigation boilerplate, missing text, access restrictions, or information that has already become stale.
+
+The first design question is therefore not “Which vector database should we use?” It is:
+
+> What knowledge should be available, who owns it, and how will changes be detected?
+
+### 2. Loader
+
+A loader extracts content from a source and turns it into a common internal representation. That representation commonly includes text plus metadata such as a source identifier, title, page, URL, timestamp, version, and permissions.
+
+The loader is an information boundary. A PDF parser that loses table columns, or an HTML loader that keeps menus but loses headings, has already damaged the future retrieval system before embeddings exist.
+
+### 3. Cleaning and preparation
+
+Preparation removes or repairs material that would make search less useful. It may normalize encoding, remove repeated headers, preserve table structure, run OCR, detect duplicates, and attach metadata.
+
+Cleaning is not the same as deleting anything that looks unusual. A product code, legal qualifier, heading, or timestamp may look like noise to a generic cleaner while being essential to a later query. The objective is to remove accidental noise while preserving retrieval signals and provenance.
+
+### 4. Chunking
+
+Most source documents are too large or too structurally mixed to retrieve as one unit. Chunking divides them into smaller units that can be represented and ranked.
+
+A chunk should be small enough to retrieve precisely, but large enough to retain the information needed to interpret its claims. The choice of boundaries, overlap, metadata inheritance, and parent references affects every later stage.
+
+Chunking creates an important distinction:
+
+- the **source document** is what a person may want to cite;
+- the **retrieval chunk** is what the search system may rank;
+- the **generation context** may include the chunk plus surrounding or parent material.
+
+These do not have to be identical.
+
+### 5. Representation
+
+The system creates a searchable representation of each chunk. In dense retrieval, this is commonly a numerical vector called an embedding. In sparse retrieval, it may involve terms and weights in an inverted index. A system may create both.
+
+The representation is not a copy of the source's facts in a human-readable format. It is an instrument for matching a query against candidates. The original text and its source reference must remain available separately.
+
+### 6. Index or store
+
+The system stores the representation together with enough information to recover the content. The sketch below is a conceptual record in pseudocode, not a literal JSON schema:
+
+```text
+record = {
+  representation,
+  chunk_text_or_reference,
+  source_id,
+  document_id,
+  location,
+  metadata,
+  version,
+  permissions
+}
+```
+
+The **index** determines how search is performed. The **store** holds records and metadata. A product may package both capabilities together, but they are different concepts. A vector index without recoverable text and provenance cannot by itself produce traceable context.
+
+## The query path
+
+### 1. User question
+
+The raw question contains more than words. It may imply an entity, intent, date, version, language, department, or access scope. “What changed in the 2025 retention policy for contractors?” contains constraints that a similarity score alone may not express reliably.
+
+### 2. Query processing
+
+The system may normalize spelling, identify entities, extract filters, rewrite an ambiguous question, create multiple search formulations, or decompose a multi-part question. Each transformation can help recall relevant material, but each can also remove a useful term or introduce an assumption.
+
+Query processing should preserve the original question. The original is needed for the final answer and for debugging whether a rewrite changed the user's intent.
+
+### 3. Query representation
+
+The processed query is converted into a representation compatible with the indexing representation. A dense query embedding is compared with document embeddings; a sparse query is matched against terms; a hybrid system may produce both candidate lists.
+
+Compatibility matters. Changing the embedding model, distance convention, or preprocessing without rebuilding or migrating the corresponding index can make scores misleading or retrieval invalid.
+
+### 4. Candidate retrieval
+
+The retriever searches the index and returns a candidate set. Candidates are evidence proposals, not final context and not answers.
+
+The `top-k` value controls how many candidates are returned; it is not a guarantee that the answer is present or that every returned item is useful. A low value can miss supporting evidence. A high value can increase redundancy and make later context selection harder.
+
+Candidate retrieval may use:
+
+- dense nearest-neighbor search for semantic similarity;
+- sparse lexical search for exact terms, identifiers, names, and codes;
+- metadata filters for dates, versions, sources, tenants, or permissions; or
+- multiple retrievers whose results are combined later.
+
+### 5. Reranking
+
+Reranking applies a more focused relevance decision to the candidate set. It can inspect the query and candidate text together and move the most useful items toward the top.
+
+Reranking cannot recover evidence that was never included in the candidate set. This is why retrieval recall and reranking quality must be evaluated separately.
+
+### 6. Context construction
+
+The best candidate list is not necessarily the best prompt context. Context construction selects passages, removes duplicates, expands parent sections when needed, preserves source identifiers, orders evidence, and enforces a token budget.
+
+This stage must decide what the model will actually see. A candidate that appears in retrieval logs but is trimmed before prompt assembly did not participate in generation.
+
+### 7. Prompt assembly
+
+The prompt combines instructions, the user's question, selected context, source labels, and an expected answer format. Grounding instructions can tell the model to distinguish supported claims from missing evidence and to cite the supplied sources.
+
+Prompt instructions are not an access-control mechanism. Authorization and tenant filtering must happen before untrusted or unauthorized material reaches the final context.
+
+### 8. Generation
+
+The language model produces a response conditioned on the prompt. It may quote, summarize, compare, or synthesize multiple passages. It may also misunderstand the evidence, ignore a relevant passage, or make a claim that no passage supports.
+
+Generation is therefore the final transformation in a longer chain, not a substitute for source quality or retrieval evaluation.
+
+## What moves between stages
+
+Keeping the artifacts visible makes debugging easier.
+
+| Stage | Main artifact | What must not be lost |
+| --- | --- | --- |
+| Loading | Document | Source identity and location |
+| Cleaning | Prepared document | Meaningful structure and provenance |
+| Chunking | Retrieval chunk | Parent/source relationship |
+| Representation | Vector or sparse record | Model/version compatibility |
+| Retrieval | Candidate list | Scores, ranks, filters, source IDs |
+| Reranking | Ordered candidates | Original retrieval trace |
+| Context construction | Final context | Traceable source labels and order |
+| Prompt assembly | Model input | Question, instructions, and evidence boundaries |
+| Generation | Answer | Claim-to-source relationships |
+
+The same text can appear in several artifacts, but those artifacts have different jobs. A vector helps search; it is not the source text. A candidate helps select context; it is not yet evidence used by the model. A citation label helps trace a claim; it is not proof that the claim is correct.
+
+## Offline work and online work
+
+The indexing path is often called **offline**, but that does not mean it happens only once. A source update can trigger loading, preparation, chunking, representation, and index updates again. Production systems need policies for incremental updates, deletions, stale records, and failed indexing jobs.
+
+The query path is often called **online** because it responds to a user request. It must balance relevance with latency and cost. Query-time work may include rewriting, multiple searches, reranking, context expansion, and generation; each additional stage changes the response budget.
+
+“Offline” and “online” describe when work is performed relative to a request, not whether the system is permanently static or dynamic.
+
+## Document and query lifecycles
+
+A document lifecycle may look like this:
+
+```text
+discovered → loaded → prepared → chunked → indexed → updated → deleted
+```
+
+A query lifecycle may look like this:
+
+```text
+asked → interpreted → searched → filtered → reranked → contextualized → answered → evaluated
+```
+
+The two lifecycles meet through identifiers and versions. If the answer cites a chunk from an obsolete document version, the query may have retrieved a technically relevant but operationally invalid record.
+
+## Why one bad stage affects downstream stages
+
+RAG is a pipeline, so later stages can only operate on what earlier stages preserved.
+
+- If the loader loses a table row, chunking cannot recover it.
+- If cleaning removes a product identifier, lexical retrieval may never match it.
+- If chunking separates a definition from its scope, an embedding may represent an incomplete idea.
+- If the query is rewritten incorrectly, a strong retriever may return excellent results for the wrong question.
+- If candidate retrieval misses the answer, reranking cannot promote it.
+- If context construction trims the only supporting passage, the model cannot cite it honestly.
+
+This leads to the most useful debugging rule in the curriculum:
+
+> Find the earliest stage where the correct evidence disappeared.
+
+Inspecting only the final answer often hides the actual cause. A poor answer can originate in source coverage, extraction, metadata, chunk boundaries, representation compatibility, filtering, retrieval, reranking, context limits, or generation behavior.
+
+## A complete mental model
+
+RAG is not “send documents to an LLM.” It is a chain of contracts:
+
+1. **Source contract:** the collection contains the knowledge we intend to use.
+2. **Loading contract:** the source is extracted without unacceptable loss.
+3. **Preparation contract:** noise is reduced while meaning and metadata survive.
+4. **Indexing contract:** chunks and representations can be found and recovered.
+5. **Retrieval contract:** relevant candidates have a reasonable chance of appearing.
+6. **Context contract:** selected evidence is traceable and fits the model input.
+7. **Generation contract:** the answer distinguishes supplied evidence from unsupported invention.
+8. **Evaluation contract:** each contract can be tested separately.
+
+The rest of this curriculum examines these contracts one at a time.
+
+## References
+
+- [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks — Lewis et al. (2020)](https://arxiv.org/abs/2005.11401)
+- [REALM: Retrieval-Augmented Language Model Pre-Training — Guu et al. (2020)](https://arxiv.org/abs/2002.08909)

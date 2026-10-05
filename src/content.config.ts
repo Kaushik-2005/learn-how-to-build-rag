@@ -1,0 +1,18 @@
+import { defineCollection, z } from 'astro:content';
+import { glob } from 'astro/loaders';
+
+const chapters = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/chapters' }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    order: z.number().int().positive(),
+    status: z.enum(['planned', 'in-progress', 'complete']).default('planned'),
+    readingTime: z.string().default('Reading guide'),
+    navTitle: z.string().optional(),
+    keywords: z.array(z.string()).default([]),
+    toc: z.array(z.string()).optional()
+  })
+});
+
+export const collections = { chapters };

@@ -1,0 +1,51 @@
+---
+import type { MarkdownHeading } from 'astro';
+interface Props { headings: MarkdownHeading[]; visibleHeadings?: string[]; }
+const { headings, visibleHeadings } = Astro.props;
+const entries = headings.filter((heading) => {
+  if (heading.depth !== 2 && heading.depth !== 3) return false;
+  return !visibleHeadings || visibleHeadings.includes(heading.text);
+});
+---
+<nav class="toc" aria-labelledby="toc-title">
+  <p id="toc-title">On this page</p>
+  <ol>
+    {entries.map((heading) => {
+      return <li class:list={{ 'toc-subsection': heading.depth === 3 }}>
+        <a href={`#${heading.slug}`} data-toc-link={heading.slug}>
+          <strong>{heading.text}</strong>
+        </a>
+      </li>;
+    })}
+  </ol>
+</nav>
+
+<script>
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]')];
+  const headings = links
+    .map((link) => document.getElementById(link.dataset.tocLink ?? ''))
+    .filter((heading): heading is HTMLElement => Boolean(heading));
+
+  const activate = (id: string) => {
+    links.forEach((link) => {
+      const active = link.dataset.tocLink === id;
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+  };
+
+  if (headings.length) {
+    activate(headings[0].id);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) activate((visible[0].target as HTMLElement).id);
+      },
+      { rootMargin: '-12% 0px -72% 0px', threshold: 0 }
+    );
+    headings.forEach((heading) => observer.observe(heading));
+  }
+</script>

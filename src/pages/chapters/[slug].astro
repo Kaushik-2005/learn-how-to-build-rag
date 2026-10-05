@@ -1,0 +1,26 @@
+---
+import { getCollection, render } from 'astro:content';
+import Chapter from '../../layouts/Chapter.astro';
+import Callout from '../../components/Callout.astro';
+import Diagram from '../../components/Diagram.astro';
+import PipelineDiagram from '../../components/PipelineDiagram.astro';
+import RagIllustration from '../../components/RagIllustration.astro';
+import CodeExample from '../../components/CodeExample.astro';
+
+const mdxComponents = { Callout, Diagram, PipelineDiagram, RagIllustration, CodeExample };
+
+export async function getStaticPaths() {
+  const entries = (await getCollection('chapters')).sort((a, b) => a.data.order - b.data.order);
+  return entries.map((entry, index) => ({
+    params: { slug: entry.id },
+    props: { entry, previous: entries[index - 1], next: entries[index + 1] }
+  }));
+}
+
+const { entry, previous, next } = Astro.props;
+const { Content, headings } = await render(entry);
+---
+
+<Chapter chapter={entry.data} headings={headings} previous={previous} next={next}>
+  <Content components={mdxComponents} />
+</Chapter>

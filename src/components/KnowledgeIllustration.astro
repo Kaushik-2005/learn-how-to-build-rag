@@ -1,0 +1,58 @@
+<div class="rag-art" role="img" aria-label="Illustration of source documents flowing through retrieval into a grounded response">
+  <div class="caption sources">UNSTRUCTURED KNOWLEDGE</div>
+  <div class="caption answer">GROUNDED RESPONSE</div>
+
+  <div class="fragment f1" data-id="DOC.01"><div class="line"></div><div class="line"></div><div class="line evidence"></div><div class="line"></div></div>
+  <div class="fragment f2" data-id="DOC.07"><div class="line"></div><div class="line evidence"></div><div class="line"></div><div class="line"></div></div>
+  <div class="fragment f3" data-id="DOC.12"><div class="line"></div><div class="line"></div><div class="line"></div><div class="line evidence"></div></div>
+  <div class="fragment f4" data-id="DOC.19"><div class="line"></div><div class="line"></div><div class="line evidence"></div><div class="line"></div></div>
+  <div class="fragment f5" data-id="DOC.24"><div class="line evidence"></div><div class="line"></div><div class="line"></div><div class="line"></div></div>
+
+  <svg class="connections" viewBox="0 0 1180 500" preserveAspectRatio="none" aria-hidden="true">
+    <path class="connection" d="M 160 120 C 350 110, 380 180, 500 230" />
+    <path class="connection active" d="M 230 250 C 360 250, 400 250, 500 250" />
+    <path class="connection" d="M 150 390 C 330 380, 410 310, 500 270" />
+    <path class="connection" d="M 350 165 C 420 175, 450 210, 510 230" />
+    <path class="connection active" d="M 370 360 C 440 340, 470 290, 510 270" />
+    <path class="connection active" d="M 680 250 C 740 250, 780 250, 875 250" />
+  </svg>
+
+  <div class="retrieval">
+    <div class="cross-x"></div><div class="cross-y"></div>
+    <div class="orbit"></div><div class="orbit-2"></div><div class="orbit-3"></div>
+    <div class="piece p1"></div><div class="piece p2"></div><div class="piece p3"></div>
+    <div class="lens"><span>RETRIEVE</span></div>
+  </div>
+
+  <div class="answer-card">
+    <span class="answer-index">SYNTHESIS / 01</span>
+    <h3>The useful answer emerges from evidence.</h3>
+    <p>Not from everything the model knows - but from the fragments that matter for this question.</p>
+    <div class="citations"><span class="citation">01</span><span class="citation">07</span><span class="citation">24</span></div>
+  </div>
+
+  <span class="coordinate c1">0.50 / 0.12</span>
+  <span class="coordinate c2">0.50 / 0.88</span>
+</div>
+
+<style>
+  .rag-art { position: relative; width: min(1180px, 94vw); height: 500px; margin: 3.5rem auto 0; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--paper); font-family: Georgia, 'Times New Roman', serif; }
+  .rag-art::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(to right, rgba(40,35,28,.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(40,35,28,.035) 1px, transparent 1px); background-size: 42px 42px; mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent); }
+  .caption, .coordinate, .fragment::before, .lens span, .answer-index, .citation { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .caption { position: absolute; top: 25px; color: var(--ink-muted); font-size: 10px; letter-spacing: .16em; }
+  .caption.sources { left: 18px; }.caption.answer { right: 18px; }
+  .fragment { position: absolute; width: 165px; height: 92px; padding: 16px; background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(45,37,27,.025); transition: transform .35s ease, border-color .35s ease; }
+  .fragment:hover { border-color: var(--accent); }.fragment::before { content: attr(data-id); position: absolute; top: 9px; right: 10px; color: var(--accent); font-size: 8px; }
+  .line { height: 4px; margin-bottom: 8px; background: var(--line); }.line:nth-child(2) { width: 83%; }.line:nth-child(3) { width: 61%; }.line:nth-child(4) { width: 72%; }.evidence { background: var(--accent-bg); opacity: .8; }
+  .f1 { left: 25px; top: 75px; transform: rotate(-4deg); }.f2 { left: 90px; top: 205px; transform: rotate(2.5deg); }.f3 { left: 15px; top: 340px; transform: rotate(-2deg); }.f4 { left: 220px; top: 125px; transform: rotate(3deg); }.f5 { left: 250px; top: 315px; transform: rotate(-3deg); }
+  .connections { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }.connection { fill: none; stroke: #c9c0b3; stroke-width: 1; stroke-dasharray: 4 6; opacity: .65; }.connection.active { stroke: var(--accent); opacity: .7; }
+  .retrieval { position: absolute; left: 50%; top: 50%; width: 215px; height: 215px; transform: translate(-50%, -50%); }.orbit { position: absolute; inset: 0; border: 1px solid var(--line); border-radius: 50%; animation: rotate 30s linear infinite; }.orbit::before, .orbit::after { content: ''; position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }.orbit::before { top: 20px; left: 35px; }.orbit::after { right: -3px; top: 102px; }.orbit-2 { position: absolute; inset: 22px; border: 1px dashed var(--line); border-radius: 50%; animation: rotateBack 38s linear infinite; }.orbit-3 { position: absolute; inset: 48px; border: 1px solid var(--accent-bg); border-radius: 50%; }
+  .lens { position: absolute; left: 50%; top: 50%; width: 94px; height: 94px; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 8px rgba(185,77,43,.035), 0 0 0 22px rgba(185,77,43,.018); }.lens span { color: var(--accent); font-size: 10px; letter-spacing: .14em; }
+  .cross-x, .cross-y { position: absolute; left: 50%; top: 50%; background: var(--line); opacity: .55; }.cross-x { width: 270px; height: 1px; transform: translate(-50%, -50%); }.cross-y { width: 1px; height: 270px; transform: translate(-50%, -50%); }
+  .piece { position: absolute; z-index: 4; width: 42px; height: 26px; border: 1px solid var(--accent); background: var(--surface); }.piece::after { content: ''; position: absolute; left: 7px; top: 8px; width: 22px; height: 3px; background: var(--accent-bg); }.p1 { left: 55px; top: 30px; transform: rotate(-12deg); }.p2 { right: 30px; bottom: 48px; transform: rotate(8deg); }.p3 { left: 25px; bottom: 55px; transform: rotate(15deg); }
+  .answer-card { position: absolute; right: 25px; top: 135px; width: 275px; min-height: 225px; padding: 27px 26px; background: var(--surface); border: 1px solid var(--line); }.answer-card::before { content: ''; position: absolute; left: -1px; top: 26px; bottom: 26px; width: 2px; background: var(--accent); }.answer-index { color: var(--accent); font-size: 9px; letter-spacing: .13em; }.answer-card h3 { margin: 22px 0 16px; font-size: 26px; font-weight: normal; line-height: 1.15; }.answer-card p { margin: 0; color: var(--ink-muted); font-size: 14px; line-height: 1.7; }.citations { display: flex; gap: 7px; margin-top: 22px; }.citation { padding: 4px 7px; border: 1px solid var(--accent-bg); color: var(--accent); font-size: 8px; }
+  .coordinate { position: absolute; color: #aaa194; font-size: 8px; }.c1 { left: 47%; top: 17px; }.c2 { left: 47%; bottom: 17px; }
+  @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } @keyframes rotateBack { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+  @media (prefers-reduced-motion: reduce) { .orbit, .orbit-2 { animation: none; } }
+  @media (max-width: 850px) { .rag-art { height: 720px; }.fragment { transform: scale(.82) !important; transform-origin: top left; }.f1 { left: 10px; top: 65px; }.f2 { left: 130px; top: 80px; }.f3 { left: 20px; top: 180px; }.f4, .f5 { display: none; }.retrieval { top: 390px; transform: translate(-50%, -50%) scale(.82); }.answer-card { width: calc(100% - 40px); left: 20px; right: auto; top: 525px; min-height: 165px; }.connections { display: none; }.caption.answer { display: none; } }
+</style>

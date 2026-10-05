@@ -1,0 +1,14 @@
+---
+interface Props { caption?: string; }
+const { caption } = Astro.props;
+---
+<figure class="diagram">
+  {caption && <figcaption>{caption}</figcaption>}
+  <div class="diagram-body"><slot /></div>
+</figure>
+
+<style>
+  .diagram { margin: 2.5rem 0; }
+  figcaption { margin-bottom: .7rem; color: var(--ink-muted); font: .72rem/1.2 Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .diagram-body { overflow-x: auto; }
+</style>

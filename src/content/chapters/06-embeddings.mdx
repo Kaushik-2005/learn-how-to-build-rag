@@ -1,0 +1,203 @@
+---
+title: Embeddings
+description: How text becomes a numerical representation that supports semantic comparison.
+order: 6
+status: complete
+toc:
+  - What an embedding is
+  - Similarity and distance
+  - Query and document compatibility
+  - Choosing an embedding model
+  - Embedding lifecycle
+  - What embeddings do not guarantee
+  - References
+---
+
+## What an embedding is
+
+An embedding is a vector: an ordered list of numbers produced from an input such as a chunk, a query, an image, or a code file.
+
+```text
+"rotate the service credential every 30 days"
+        -> [0.12, -0.04, 0.77, ...]
+```
+
+The numbers are not a human-readable dictionary of facts. They are coordinates in a learned representation space. A model is trained so that some relationships useful for its training objectives are reflected in geometric relationships between vectors.
+
+For RAG, the important operation is to embed documents and queries into compatible representations, then compare them to find candidate passages. The embedding is a representation of the input, not a guarantee that the input is true, complete, authorized, or relevant to every possible question.
+
+<RagIllustration kind="embeddings" />
+
+### One vector represents many properties
+
+A text chunk can express a topic, entities, intent, language, style, and relationships between concepts. A single vector compresses those properties into a fixed-dimensional representation. That makes fast comparison possible, but it also means that distinctions important to a task may be blurred.
+
+For example, two passages may both discuss database backups while only one specifies a retention period. Their embeddings can be close even though the distinction matters to the question. Retrieval systems often combine semantic retrieval with lexical matching, metadata filters, or reranking to handle these cases.
+
+### Document and query embeddings
+
+At indexing time, each prepared chunk becomes a document vector. At query time, the user question becomes a query vector. The index searches for document vectors close to the query vector according to a chosen metric.
+
+<RagIllustration kind="embedding-flow" />
+
+The query and document encoders may be the same model or related components trained for their respective roles. What matters is compatibility: a query vector must be compared with vectors produced under the assumptions the index expects.
+
+## Similarity and distance
+
+### Cosine similarity
+
+Cosine similarity compares the angle between two vectors:
+
+```text
+cosine(q, d) = (q · d) / (||q|| ||d||)
+```
+
+Here `q · d` is the dot product, and `||q||` and `||d||` are vector lengths. The score focuses on direction rather than magnitude. If vectors are normalized to unit length, cosine similarity and dot product produce the same ranking.
+
+### Dot product
+
+The dot product is:
+
+```text
+q · d = q1d1 + q2d2 + ... + qndn
+```
+
+It rewards alignment and, when vectors are not normalized, also reflects magnitude. Whether magnitude should influence ranking is a model and system decision. A system must use the metric for which its embedding model and index configuration were designed.
+
+### Euclidean distance
+
+Euclidean distance measures the straight-line distance between vectors:
+
+```text
+distance(q, d) = sqrt(sum((qi - di)^2))
+```
+
+For normalized vectors, Euclidean distance and cosine similarity are monotonically related, so they produce equivalent rankings when applied consistently. Without normalization, they can rank candidates differently.
+
+### A score is not a probability
+
+Similarity scores are relative geometric measurements. A score of `0.8` does not mean “80% likely to be correct.” Scores from different models, metrics, normalization choices, or datasets should not be compared as if they shared one universal scale.
+
+This is especially important when combining dense scores with lexical scores. Raw values may have incompatible ranges and meanings; hybrid retrieval needs an explicit fusion method.
+
+## Query and document compatibility
+
+### The representation contract
+
+An embedding pipeline has a contract:
+
+- the same or compatible model family is used for the query and indexed documents;
+- the vector dimension matches the index schema;
+- the metric matches the model's intended comparison behavior;
+- the same normalization policy is applied at indexing and query time; and
+- the model's input limits and instruction format are respected.
+
+Breaking this contract can produce vectors that are numerically valid but semantically incomparable. A dimension mismatch may fail loudly. A model mismatch may fail silently by returning plausible but poor candidates.
+
+### Instruction and prefix conventions
+
+Some retrieval models expect different input prefixes or instructions for queries and passages. E5, for example, is presented as a family of text embedding models trained for retrieval and other single-vector tasks. The model's paper and documentation define how its inputs should be formatted. [Wang et al., “Text Embeddings by Weakly-Supervised Contrastive Pre-training”](https://arxiv.org/abs/2212.03533)
+
+The general lesson is broader than one model: an embedding model's input convention is part of the model interface. Omitting it can change the representation even when the visible text is unchanged.
+
+### Multilingual and domain compatibility
+
+A multilingual model may map multiple languages into a shared space, but support for a language does not imply equal retrieval quality across domains. A general model may understand everyday language while underrepresenting product codes, legal phrasing, medical abbreviations, or internal terminology.
+
+Domain evaluation should use the questions and documents that matter for the intended system. A model that performs well on a public benchmark is not automatically the right model for a private corpus.
+
+## Choosing an embedding model
+
+Model selection is a compatibility and evaluation problem, not a leaderboard lookup.
+
+### Important dimensions
+
+Consider:
+
+- **input limits:** how much text can be represented in one call;
+- **vector dimension:** storage and index cost, but not a direct measure of quality;
+- **language coverage:** whether the corpus and queries are represented well;
+- **domain vocabulary:** identifiers, abbreviations, and specialized terms;
+- **query/document behavior:** whether the model is trained for retrieval;
+- **metric and normalization:** how vectors should be compared;
+- **latency and cost:** how indexing and query-time computation fit the system; and
+- **deployment and privacy:** where text is sent and how the model is operated.
+
+Representative families include sentence-transformer models, BGE, E5, Voyage, and hosted embedding APIs. These are examples of model categories, not a universal ranking. SBERT demonstrated a siamese approach for producing sentence embeddings that can be compared with cosine similarity. [Reimers and Gurevych, “Sentence-BERT”](https://arxiv.org/abs/1908.10084)
+
+### Evaluate retrieval, not just embedding geometry
+
+An embedding model can produce visually smooth clusters or high similarity for paraphrases and still retrieve the wrong evidence for the target task. Evaluation should include:
+
+- representative questions;
+- relevant chunk or document labels;
+- exact identifiers and rare terms;
+- paraphrased questions;
+- ambiguous questions;
+- different languages if relevant;
+- unanswerable questions; and
+- version-sensitive or conflicting documents.
+
+Measure candidate recall and ranking quality, then inspect failures. The model is only one part of the retrieval system: chunk boundaries, metadata filters, index approximation, and query processing also influence results.
+
+## Embedding lifecycle
+
+### Indexing is a materialized transformation
+
+Embeddings are derived artifacts. They depend on the source text, chunking configuration, model, input formatting, preprocessing, and normalization policy. An illustrative metadata record (not a required schema) might include:
+
+```text
+embedding_model: model identifier and revision
+embedding_dimension: 1024
+metric: cosine
+normalized: true
+chunking_version: v3
+created_at: timestamp
+```
+
+This metadata makes an index explainable and supports migrations.
+
+### Stale embeddings
+
+If a source changes, the vector created from the old text is stale. If only some chunks are updated, the index may contain multiple versions of the same logical document. Retrieval can then surface obsolete evidence unless version and effective-date metadata are used.
+
+### Re-embedding
+
+Changing an embedding model or its preprocessing usually requires re-embedding the affected corpus. The new vectors may have a different dimension, geometry, score distribution, or semantic behavior. They should not be mixed casually with vectors from the old model in one comparison space.
+
+A safe conceptual migration keeps old and new indexes distinguishable, evaluates the new representation on a fixed test set, and switches deliberately. During a transition, source IDs and chunk IDs remain the bridge between the two indexes.
+
+### Dimensionality and compression
+
+More dimensions can provide more representational capacity, but dimension count alone does not establish quality. It increases storage and can affect index construction and search cost. Vector compression can reduce cost later, but it introduces approximation error and belongs to the index/storage design as well as the embedding design.
+
+## What embeddings do not guarantee
+
+Embeddings do not guarantee:
+
+- factual correctness of the input;
+- retrieval of every relevant passage;
+- exact identifier matching;
+- authorization enforcement;
+- preservation of every table or code relationship;
+- compatibility with a different model's vectors; or
+- a grounded final answer.
+
+Semantic similarity is also not identical to relevance. A passage can be about the same topic but fail to answer the question. The retrieval stage therefore needs explicit evaluation and often complementary signals such as sparse search, metadata filters, or reranking.
+
+Embeddings are one transformation in the pipeline:
+
+```text
+prepared text -> embedding vector -> similarity search -> candidates
+```
+
+They do not replace preparation, indexing, retrieval evaluation, context construction, or answer verification.
+
+Once document and query vectors share a compatible representation, the system still needs a structure that stores their records and finds candidate neighbors. That is the role of vector stores and indexes in the next chapter.
+
+## References
+
+- [Wang et al., “Text Embeddings by Weakly-Supervised Contrastive Pre-training”](https://arxiv.org/abs/2212.03533)
+- [Reimers and Gurevych, “Sentence-BERT”](https://arxiv.org/abs/1908.10084)
+- [Karpukhin et al., “Dense Passage Retrieval for Open-Domain Question Answering”](https://arxiv.org/abs/2004.04906)
+- [Lewis et al., “Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks”](https://arxiv.org/abs/2005.11401)

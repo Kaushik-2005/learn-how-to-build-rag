@@ -1,0 +1,12 @@
+.prose { max-width: var(--measure); font-size: 1.08rem; }
+.prose h2 { margin: 3.5rem 0 1rem; scroll-margin-top: 5.5rem; font-size: 2rem; line-height: 1.15; letter-spacing: -.025em; }
+.prose h3 { margin: 2.4rem 0 .7rem; scroll-margin-top: 5.5rem; font-size: 1.35rem; line-height: 1.25; }
+.prose p, .prose ul, .prose ol, .prose table, .prose pre, .prose blockquote { margin: 1.1rem 0; }
+.prose a { color: var(--accent); }
+.prose blockquote { margin-inline: 0; padding: .5rem 1.2rem; border-left: 3px solid var(--accent); background: var(--accent-bg); }
+.prose code { padding: .12em .3em; background: #e9e5dc; font-size: .9em; }
+.prose pre { padding: 1.2rem 1.35rem; overflow-x: auto; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px rgba(45,37,27,.035); }
+.prose pre code { padding: 0; background: transparent; color: inherit; font-size: .86em; line-height: 1.7; }
+.prose table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.prose th, .prose td { padding: .7rem .8rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.prose th { background: var(--surface); }

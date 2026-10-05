@@ -1,0 +1,212 @@
+---
+title: Data Sources and Document Loading
+description: How varied sources become documents with content and metadata.
+order: 3
+status: complete
+toc:
+  - The problem
+  - Source categories
+  - A loader's contract
+  - Extraction is an information-loss decision
+  - Loading and access control
+  - Where loading sits in the pipeline
+  - References
+---
+
+## The problem
+
+Retrieval cannot search a source that has not been represented as usable content. Before chunking or embeddings, a RAG pipeline must answer a more basic question:
+
+> How do we turn a source system into a document record without losing the information and provenance that retrieval will need later?
+
+A loader is the boundary between an external source and the rest of the pipeline. It reads or receives source data, extracts usable content, and attaches enough metadata to identify where that content came from.
+
+Loading is not the same as cleaning. A loader should faithfully expose what it found, including extraction uncertainty where possible. Cleaning and preparation can then decide what to normalize, remove, repair, or reject.
+
+## Source categories
+
+<RagIllustration kind="sources" />
+
+The source format influences what “content” means and what can go wrong.
+
+### Unstructured documents
+
+PDFs, Word documents, presentations, and plain text files primarily contain prose, but their meaning may depend on layout. Headings, footnotes, page numbers, columns, tables, captions, and reading order can all matter.
+
+A PDF is especially important to treat as a page description rather than automatically as a clean text document. A text-based PDF may expose selectable characters while a scanned PDF may contain only page images. Two files with the same `.pdf` extension can therefore need different extraction paths.
+
+### Web pages and HTML
+
+Web pages contain article text alongside navigation, cookie notices, advertisements, related links, scripts, and boilerplate. A loader must identify the meaningful content and preserve useful structure such as the title, headings, URL, publication date, and canonical link.
+
+HTML parsing and content extraction are separate concerns. A parser can expose tags and text nodes; it does not automatically know which parts are the article a reader cares about. Python's standard `HTMLParser`, for example, reports start tags, end tags, and text data, but leaves application-specific interpretation to the caller. [Python documentation](https://docs.python.org/3/library/html.parser.html)
+
+### Structured data
+
+SQL tables, CSV files, spreadsheets, and JSON contain records and fields rather than only paragraphs. A loader must decide how rows, columns, keys, and relationships become searchable content.
+
+For a table, one row might become a document, or a group of related rows might become one document. The decision depends on how users ask questions. A row containing an error code and its resolution should remain connected; a large transaction table may need a different query or aggregation path entirely.
+
+SQL loading normally means executing a bounded, authorized query and converting returned rows into records. A query result is not automatically a narrative document. The loader should preserve column names, row identifiers, source table, query or snapshot time, and any version information needed to interpret the values. [SQLAlchemy's selection tutorial](https://docs.sqlalchemy.org/en/21/orm/queryguide/select.html) illustrates the underlying distinction between constructing a `SELECT` statement and receiving rows from its execution.
+
+### Code repositories
+
+Repositories contain source files, configuration, documentation, issue history, and generated artifacts. Code is structured text: symbols, imports, comments, classes, functions, and file paths carry meaning.
+
+A repository loader should preserve file paths, language, branch or commit, and line ranges. It should usually exclude build output, vendored dependencies, secrets, and generated files unless the learning or search requirement explicitly needs them. Code-aware chunking belongs to the next stage; the loader's job is to identify and expose the files and their locations accurately.
+
+### Knowledge systems and collaboration tools
+
+Confluence, wiki systems, Slack, email, and ticketing systems combine text with authorship, timestamps, threads, reactions, attachments, and permissions. The message body alone is rarely enough.
+
+For a discussion, the surrounding thread may change the meaning of a reply. For a policy page, the version and owner may matter more than the prose. For email, recipients and dates can be retrieval signals and access-control inputs. Loaders should preserve relationships rather than flattening every item into anonymous text.
+
+### Images, scans, audio, and video
+
+Images and scanned documents may require OCR. Audio usually requires transcription, and video may require both speech transcription and a strategy for slides or visual frames.
+
+These sources introduce an additional uncertainty layer: the extracted text is an interpretation of a non-text artifact. OCR and transcription output should therefore retain confidence, language, page or timestamp location, and a reference to the original media.
+
+Tesseract's official documentation describes it as a text-recognition engine for images and notes that PDF input must be converted or handled with a tool such as OCRmyPDF; it also documents searchable PDF and hOCR output. [Tesseract documentation](https://tesseract-ocr.github.io/tessdoc/InputFormats.html)
+
+## A loader's contract
+
+<RagIllustration kind="loading-flow" />
+
+A loader should provide a stable internal record even when the source formats differ.
+
+<CodeExample kind="document" />
+
+The exact object shape is an implementation detail. The ideas are not:
+
+- **Content** is what later stages can transform and search.
+- **Metadata** describes the content and supports filtering.
+- **Source** lets a person locate the original.
+- **Document ID** lets the system update or delete the right item.
+- **Location** supports precise provenance.
+- **Version** prevents a current answer from silently using obsolete text.
+
+A loader may also emit warnings, extraction statistics, or a quality signal. Those do not replace the content; they make uncertainty visible to later validation.
+
+## Preserve structure, not just characters
+
+The naive definition of loading is “extract all text.” The useful definition is “extract content while preserving enough structure to interpret it.”
+
+Consider a small policy table:
+
+| Plan | Retention | Eligible users |
+| --- | --- | --- |
+| Standard | 30 days | Individual accounts |
+| Enterprise | 90 days | Contracted teams |
+
+If extraction returns only a sequence of cells without row and column relationships, a later answer may attach the wrong retention period to the wrong plan. The characters survived, but the meaning did not.
+
+Structure worth preserving can include:
+
+- heading hierarchy;
+- paragraph and list boundaries;
+- table rows, columns, and captions;
+- page and section boundaries;
+- code language and file path;
+- speaker, author, and timestamp;
+- links and canonical URLs;
+- parent-child relationships between records; and
+- access-control attributes.
+
+The best representation is not always plain text. A structured intermediate representation can retain layout and relationships while allowing a later stage to produce search text deliberately.
+
+## Common loader outputs
+
+### PDF and Word documents
+
+Useful output includes text, page number, title, headings, table regions, and the original file reference. Common extraction problems include:
+
+- broken reading order in multi-column pages;
+- headers and footers repeated on every page;
+- hyphenation splitting words across lines;
+- tables flattened into ambiguous text;
+- missing characters from unusual fonts; and
+- scanned pages producing no text at all.
+
+### Web and HTML
+
+Useful output includes the main content, title, headings, URL, canonical URL, publication date, and retrieval timestamp. Common problems include:
+
+- navigation and boilerplate mixed with article text;
+- content rendered only after client-side scripts run;
+- duplicate pages at multiple URLs;
+- hidden or collapsed content;
+- malformed markup; and
+- pages changing after they were loaded.
+
+### SQL and structured records
+
+Useful output includes field names, row IDs, table or collection name, query scope, snapshot time, and relationships. Common problems include:
+
+- joining unrelated rows into a misleading document;
+- omitting column names and losing semantic meaning;
+- exposing data outside the intended authorization scope;
+- treating numeric values as prose without units; and
+- loading a moving table without recording when the snapshot was taken.
+
+### Repositories and code
+
+Useful output includes path, language, symbol or section, line range, branch, and commit. Common problems include:
+
+- splitting a function from its signature or imports;
+- including generated or vendored code;
+- losing indentation or code fences;
+- mixing files from different commits; and
+- indexing secrets or private configuration.
+
+### Audio and video
+
+Useful output includes transcript segments, speaker labels where available, timestamps, language, and a link to the original media. Common problems include:
+
+- homophones and domain terms transcribed incorrectly;
+- overlapping speakers;
+- missing punctuation and sentence boundaries;
+- background noise; and
+- visual information absent from the transcript.
+
+## Extraction is an information-loss decision
+
+Every loader chooses what to keep and what to discard. That choice can be explicit or accidental.
+
+<RagIllustration kind="extract-structure" />
+
+If a parser discards a page number, later citations cannot recover it. If it removes a heading, chunking cannot reliably inherit that heading. If it collapses two table columns, no embedding model can infer the original layout with certainty.
+
+This is why loader quality should be checked before measuring retrieval quality. A retrieval failure may actually be an extraction failure that happened much earlier.
+
+## Loading and access control
+
+Loading is also a security boundary. A source connector may have access to more data than a particular user should be allowed to retrieve. Metadata such as tenant, department, document owner, classification, and permissions must travel with the loaded record.
+
+Filtering after generation is too late. The system should enforce authorization before unauthorized material enters retrieval results or final context. Prompt instructions are not a substitute for this control.
+
+The source connector should also avoid treating untrusted document text as executable instructions. Retrieved content is data for later stages, not authority over the pipeline.
+
+## Validation before cleaning
+
+Before sending loaded records to cleaning and preparation, inspect at least:
+
+1. whether content was extracted at all;
+2. whether the content length is plausible for the source;
+3. whether pages, rows, files, or timestamps are present;
+4. whether headings, tables, and code structure survived;
+5. whether the source and document IDs are stable;
+6. whether versions and timestamps are recorded; and
+7. whether permissions and extraction warnings are attached.
+
+Validation should produce reviewable evidence: sample records, counts, warnings, and links back to original artifacts. A single “loaded successfully” status is not enough.
+
+## Where loading sits in the pipeline
+
+Loading answers “What did the source contain, and where did it come from?” Cleaning answers “What should be normalized or removed?” Chunking answers “What retrieval units should be formed?” Keeping those questions separate makes failures easier to locate and prevents a parser from silently becoming a cleanup policy.
+
+## References
+
+- [Python `html.parser` documentation](https://docs.python.org/3/library/html.parser.html)
+- [SQLAlchemy ORM querying documentation](https://docs.sqlalchemy.org/en/21/orm/queryguide/select.html)
+- [Tesseract input formats and OCR documentation](https://tesseract-ocr.github.io/tessdoc/InputFormats.html)
