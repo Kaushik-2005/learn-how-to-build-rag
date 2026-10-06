@@ -1,0 +1,66 @@
+---
+title: Advanced RAG Patterns
+description: Extend a working baseline with targeted mechanisms for query complexity, structure, scoring, and iterative evidence gathering.
+order: 16
+status: complete
+toc:
+  - Begin with the bottleneck
+  - Reshape the question and retrieval plan
+  - Preserve structure and richer matches
+  - Retrieve iteratively or across relationships
+  - Trade-offs and selection
+  - References
+---
+
+## Begin with the bottleneck
+
+Advanced RAG is a set of alternative mechanisms, not a required upgrade path. First establish a simple baseline and use evaluation traces to identify what fails: ambiguous questions, disconnected chunks, coarse matching, incomplete multi-hop evidence, broad corpus-level questions, or mixed media. Then add the smallest pattern that directly addresses that limitation and measure its quality, cost, and new failure modes.
+
+<RagIllustration kind="advanced-patterns" />
+
+## Reshape the question and retrieval plan
+
+**Routing** sends a question to a suitable corpus, retriever, or modality. It can avoid searching irrelevant collections, but a wrong route can hide the needed evidence. Routing decisions must never grant permissions; enforce authorization independently.
+
+**Query rewriting and multi-query retrieval** create clearer or complementary search formulations, then merge their candidates. This can cover paraphrases and vocabulary mismatch, at the cost of extra searches and duplicate/noisy results. Preserve the original question and constraints so expansions do not drift. **Query decomposition** splits a multi-part question into focused subquestions; dependencies between subquestions matter, so answering them independently may lose the relationship the user asked about.
+
+**Multi-hop or iterative retrieval** uses evidence from one step to formulate the next search. IRCoT is a research example that interleaves retrieval with reasoning for multi-step questions ([ACL 2023](https://aclanthology.org/2023.acl-long.557/)). It can find linked facts that no single query surfaces, but adds latency, makes errors compound across steps, and needs a stopping condition. Keep intermediate evidence traceable and verify each hop rather than treating generated reasoning as source evidence.
+
+**HyDE (Hypothetical Document Embeddings)** asks a language model to draft a hypothetical passage, embeds that passage, and searches for real corpus passages near it. The hypothetical text is a query aid—not retrieved evidence and not an answer to cite. HyDE can bridge query/document style mismatch, but invented details can steer search toward the wrong neighborhood ([Gao et al., ACL 2023](https://aclanthology.org/2023.acl-long.99/)).
+
+## Preserve structure and richer matches
+
+**Parent–child, sentence-window, and hierarchical retrieval** index small units for precise matching, then expand to a parent section, neighboring sentences, or a higher-level summary. This restores local context but can introduce irrelevant text, duplicate material, and larger context costs. The child-to-parent mapping and source locations must survive expansion.
+
+**Contextual retrieval** adds document-specific explanatory context to a chunk for indexing or search, helping a fragment whose meaning depends on its section. Anthropic describes one such approach as an engineering example ([Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval)); it requires extra preparation and can propagate generated contextualization errors. **Metadata-aware retrieval** uses trusted fields such as version, date, language, or category to narrow candidates. **Self-query retrieval** uses a model to infer search terms or metadata constraints from natural language. Both can improve precision, but inferred filters can be wrong, and metadata conditions must not substitute for authorization checks.
+
+**Multi-vector retrieval** stores multiple representations for a document or its parts so different aspects can match; it can improve coverage at the cost of more vectors, identity/deduplication work, and scoring. **Late interaction** sits between one-vector retrieval and a full cross-encoder: ColBERT independently encodes query and passage tokens, then compares them at scoring time ([Khattab and Zaharia, SIGIR 2020](https://arxiv.org/abs/2004.12832)). The finer-grained match can retain term interactions while allowing document-side representations to be prepared ahead, but increases representation and serving complexity.
+
+**Contextual compression** extracts or selects query-relevant parts of retrieved passages before generation. It can save context budget, but the compressor may delete caveats or distort meaning; always retain a path to the original passage and assess the compressed evidence against it.
+
+## Retrieve iteratively or across relationships
+
+**Corrective RAG (CRAG)** evaluates whether retrieved evidence is adequate and uses that assessment to trigger corrective actions, such as refining evidence or consulting another source. The original proposal is one specific design, not a universal recipe ([Yan et al., 2024](https://arxiv.org/abs/2401.15884)). A bad evaluator can send the system down the wrong path, while added retrieval actions increase cost and create new provenance obligations.
+
+**Self-RAG** trains a model to make retrieval and reflection decisions using dedicated reflection tokens; it is more than adding “check your answer” to a prompt ([Asai et al., ICLR 2024](https://proceedings.iclr.cc/paper_files/paper/2024/file/25f7be9694d7b32d5cc670927b8091e1-Paper-Conference.pdf)). It can make retrieval more adaptive, but requires a compatible trained model and does not guarantee reliable self-critique.
+
+**Graph-based RAG** represents entities and relationships explicitly, enabling retrieval across connections that may be split among documents. Microsoft’s GraphRAG paper also describes community summaries for corpus-wide questions that are closer to query-focused summarization than nearest-neighbor lookup ([Edge et al., 2024](https://arxiv.org/abs/2404.16130)). Graph construction and summaries can be costly, lossy, and wrong; citations should lead back to source evidence, not stop at a generated graph node.
+
+**Agentic RAG** gives a model control over a sequence of retrieval tools or other actions. It can adapt the plan to a complex question, but brings variable latency, nondeterministic paths, tool-error propagation, and a larger security surface. Bound tool permissions, steps, budgets, and termination conditions. **Multimodal RAG** retrieves or aligns text with images, tables, audio, or video representations; it can answer questions grounded in non-text evidence, but depends on modality-specific extraction, alignment, timestamps/regions, and evaluation. A text caption is not a substitute for preserving the original media and its location. A published example of a unified text/table/image/video pipeline illustrates the breadth of these design decisions ([Drushchak et al., MAGMaR 2025](https://aclanthology.org/2025.magmar-1.5/)).
+
+## Trade-offs and selection
+
+For each candidate pattern, state the unmet need, the mechanism, what it might improve, what extra data/latency/complexity it adds, and the failure it can introduce. Compare it with the same representative evaluation set and baseline. More steps can improve a particular task, but they also create more opportunities for drift, stale evidence, permission mistakes, and debugging ambiguity.
+
+Choose one change at a time where possible. Keep a rollback path and monitor both its target metric and the metrics it may harm. If the baseline already retrieves and answers adequately at the required cost and risk, it may be the right architecture.
+
+## References
+
+- [Gao et al., “Precise Zero-Shot Dense Retrieval without Relevance Labels” (ACL 2023)](https://aclanthology.org/2023.acl-long.99/)
+- [Trivedi et al., “Interleaving Retrieval with Chain-of-Thought Reasoning…” (ACL 2023)](https://aclanthology.org/2023.acl-long.557/)
+- [Khattab and Zaharia, “ColBERT” (SIGIR 2020)](https://arxiv.org/abs/2004.12832)
+- [Yan et al., “Corrective Retrieval Augmented Generation” (2024)](https://arxiv.org/abs/2401.15884)
+- [Asai et al., “Self-RAG” (ICLR 2024)](https://proceedings.iclr.cc/paper_files/paper/2024/file/25f7be9694d7b32d5cc670927b8091e1-Paper-Conference.pdf)
+- [Edge et al., “From Local to Global: A Graph RAG Approach to Query-Focused Summarization” (2024)](https://arxiv.org/abs/2404.16130)
+- [Anthropic, “Contextual Retrieval”](https://www.anthropic.com/engineering/contextual-retrieval)
+- [Drushchak et al., “Multimodal Retrieval-Augmented Generation: Unified Information Processing Across Text, Image, Table, and Video Modalities” (MAGMaR 2025)](https://aclanthology.org/2025.magmar-1.5/)

@@ -1,0 +1,69 @@
+---
+title: Hybrid Retrieval
+description: How dense and sparse candidate lists can be combined without confusing their score scales.
+order: 10
+status: complete
+toc:
+  - Why combine retrieval signals
+  - Parallel candidate generation
+  - Why raw scores do not simply add
+  - Reciprocal Rank Fusion
+  - Weighted score fusion
+  - Filters, duplicates, and evaluation
+  - References
+---
+
+## Why combine retrieval signals
+
+Dense retrieval can match related wording; sparse retrieval can reward exact terms such as product names, versions, and error codes. A query may need both—for example, a semantic question that also names a specific identifier. Hybrid retrieval runs both kinds of search and combines their candidate rankings.
+
+<RagIllustration kind="hybrid-fusion" />
+
+Fusion is useful when the two retrievers contribute complementary evidence. It is not automatically better: if one signal is noisy, mismatched, or poorly configured, adding it can lower candidate quality. Evaluate dense-only, sparse-only, and fused results on representative questions.
+
+## Parallel candidate generation
+
+The same processed query can be sent to a dense retriever and a sparse retriever. Each returns its own ranked list, with its own score semantics and cutoff. Candidate generation can run in parallel; the lists are then merged, duplicate records reconciled, and the fused candidates passed downstream.
+
+This chapter combines candidate rankings, not raw text or embeddings. A passage absent from both input lists cannot be recovered by fusion, and fusion does not decide which passages belong in the final model context. Reranking is a later stage (Chapter 11).
+
+## Why raw scores do not simply add
+
+A dense score might be cosine similarity or an inner product; a sparse score might be a BM25 value. Their numeric scales and distributions are different. A score of `0.72` from one retriever cannot automatically be treated as equivalent evidence to `12.4` from another. The values depend on model, metric, corpus, query, and configuration.
+
+Adding uncalibrated scores can let the larger-looking scale dominate, even when that retriever is not more reliable. Normalization can put values on a comparable range, but range matching alone does not ensure equal meaning or confidence. Score-based fusion therefore needs a deliberate normalization and weights validated on the target queries. [Bruch, Gai, and Ingber analyze score-based and rank-based fusion and their trade-offs.](https://arxiv.org/abs/2210.11934)
+
+## Reciprocal Rank Fusion
+
+Reciprocal Rank Fusion (RRF) avoids comparing the raw scores. It uses each candidate's position in each ranked list:
+
+`RRF(d) = Σₘ 1 / (c + rankₘ(d))`
+
+Here `d` is a candidate, `rankₘ(d)` is its one-based position in retriever `m`, and `c` is a positive smoothing constant. Contributions from each list are added; a candidate missing from a list contributes nothing there. Smaller ranks contribute more, while the constant reduces the steepness of the rank penalty. Candidates are sorted by the resulting RRF score.
+
+For example, a passage ranked second by dense search and first by sparse search receives support from both lists. Another passage ranked first by dense search but absent from the sparse list gets support from only one. RRF can therefore favor consistent cross-list support without pretending that cosine and BM25 values share a scale.
+
+RRF discards score margins: it treats rank positions as the input, not how far apart two scores were. Its constant and each retriever's candidate depth affect the result, so tune and evaluate them for the application. The original paper reports experiments on specific retrieval tasks; that is not a universal guarantee that RRF wins for every corpus or query set. [Cormack, Clarke, and Büttcher introduced RRF for combining ranked retrieval results.](https://doi.org/10.1145/1571941.1572114)
+
+## Weighted score fusion
+
+An alternative is to normalize the dense and sparse scores, then combine them with chosen weights, conceptually:
+
+`combined(d) = w_dense · normalized_dense(d) + w_sparse · normalized_sparse(d)`
+
+This preserves score-strength information that RRF ignores, but depends on the normalization method and weight choices. A candidate missing from one list also needs an explicit missing-score policy. Calibrate both choices on held-out, representative queries; do not assume one set transfers unchanged across models, corpora, or query types. Rank fusion is often simpler when score scales are not calibrated, while score fusion may be appropriate when they have been meaningfully aligned. Neither method is universally best.
+
+## Filters, duplicates, and evaluation
+
+Apply the same trusted eligibility rules—such as tenant, effective date, or document version—to both retrieval paths. If one branch searches a different permitted or current corpus, fusion may favor stale or ineligible material. Authorization must be enforced independently of what the query text or a model suggests.
+
+The same passage may appear in both lists under the same record ID. Deduplicate it before producing the final candidate list, while preserving its rank from each retriever so fusion can count both contributions. If the systems use different IDs for the same content, define a reliable identity mapping; otherwise duplicates can consume multiple top-k slots.
+
+Compare the fused list against each single-retriever baseline using the same query set, filters, candidate budget, and relevance judgments. Inspect questions that contain both semantic wording and exact identifiers, as well as cases where the branches disagree. Fusion changes candidate ranking; it cannot fix a missing source, a bad chunk, or a relevant passage neither branch retrieved.
+
+The output is still a candidate set. Chapter 11 explains how a reranker can examine query–passage pairs more directly and reorder those candidates before context is built.
+
+## References
+
+- [Cormack, Clarke, and Büttcher, “Reciprocal rank fusion outperforms condorcet and individual rank learning methods” (SIGIR 2009)](https://doi.org/10.1145/1571941.1572114)
+- [Bruch, Gai, and Ingber, “An Analysis of Fusion Functions for Hybrid Retrieval”](https://arxiv.org/abs/2210.11934)

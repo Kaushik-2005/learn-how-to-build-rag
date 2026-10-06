@@ -1,5 +1,5 @@
 ---
-interface Props { kind: 'document' | 'quality' | 'chunk-context' | 'chunk-record'; title?: string; language?: string; }
+interface Props { kind: 'document' | 'quality' | 'chunk-context' | 'chunk-record' | 'embedding-record'; title?: string; language?: string; }
 const { kind, title = 'DOCUMENT SHAPE', language = 'JSON' } = Astro.props;
 ---
 
@@ -51,6 +51,18 @@ const { kind, title = 'DOCUMENT SHAPE', language = 'JSON' } = Astro.props;
     <div><span class="key">text</span><span class="punct">:</span><span>...</span></div>
     <div><span class="key">page_start</span><span class="punct">:</span><span>4</span></div>
     <div><span class="key">page_end</span><span class="punct">:</span><span>5</span></div>
+  </div>
+</div>}
+
+{kind === 'embedding-record' && <div class="code-example" aria-label="Conceptual embedding metadata record example">
+  <div class="code-header"><span>EMBEDDING METADATA</span><span>CONCEPTUAL RECORD</span></div>
+  <div class="quality-body">
+    <div><span class="key">embedding_model</span><span class="punct">:</span><span>model identifier and revision</span></div>
+    <div><span class="key">embedding_dimension</span><span class="punct">:</span><span>1024</span></div>
+    <div><span class="key">metric</span><span class="punct">:</span><span>cosine</span></div>
+    <div><span class="key">normalized</span><span class="punct">:</span><span>true</span></div>
+    <div><span class="key">chunking_version</span><span class="punct">:</span><span>v3</span></div>
+    <div><span class="key">created_at</span><span class="punct">:</span><span>timestamp</span></div>
   </div>
 </div>}
 

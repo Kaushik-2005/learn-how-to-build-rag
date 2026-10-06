@@ -1,0 +1,58 @@
+---
+title: Context Construction
+description: Turn retrieved candidates into a compact, ordered, traceable evidence packet for generation.
+order: 12
+status: complete
+toc:
+  - Candidates are not context
+  - Select, deduplicate, and expand
+  - Preserve provenance and disagreement
+  - Order and fit the context
+  - Failure modes and handoff
+  - References
+---
+
+## Candidates are not context
+
+Retrieval and reranking produce a set of plausible passages. The model should not automatically receive every candidate: some are repetitive, incomplete, outdated, or irrelevant to the current question. **Context construction** decides which evidence to include, how related pieces fit together, and how to present them within the input budget.
+
+<RagIllustration kind="context-assembly" />
+
+The output is an evidence packet, not the final prompt. It should retain enough source identity to trace each statement back to its document and location. Chapter 13 covers combining that packet with instructions and the user’s question to form the generation prompt.
+
+## Select, deduplicate, and expand
+
+Start with passages that support the information need, not simply everything above an arbitrary score threshold. Remove exact duplicates and consider whether near-duplicates add distinct detail. A second passage that repeats a policy sentence may waste budget; a passage that adds the responsible team or an exception may be complementary.
+
+Retrieved chunks can omit surrounding qualifications. **Parent expansion** uses a chunk’s document and location identifiers to fetch a larger surrounding section, or sibling chunks, when more context is needed. Expansion can restore a definition, exception, or antecedent that a small retrieval unit lacks. It can also bring in unrelated material, duplicate evidence, or stale neighboring content. Expand selectively, keep the original chunk identifiable, and verify that the added text belongs to the same source version and permitted scope.
+
+Selection is task-dependent. A question asking for the latest policy may need version and date evidence; a question asking for a process may need several steps in sequence. A relevance-only top-k is not necessarily a complete or well-balanced evidence set.
+
+## Preserve provenance and disagreement
+
+Keep stable source IDs and useful locations—such as document, section, page, row, or timestamp—alongside each passage. Use clear separators and labels so neighboring passages do not appear to be one continuous quotation. These labels also make it possible for later answer-generation and citation steps to attribute claims to actual supplied evidence.
+
+Do not silently merge contradictory passages. Retain the conflict with enough metadata to distinguish sources, dates, versions, or scope, or exclude a passage only under an explicit and defensible rule. If the current and older policy differ, the context should make that distinction visible rather than presenting both as a single fact. Retrieval metadata filters and context formatting are not authorization controls; access must already have been enforced by the system.
+
+## Order and fit the context
+
+The context budget is shared with the system instructions, user question, any conversation history, and the output allowance. The usable evidence budget is therefore smaller than the model’s advertised input limit. Count the assembled input with the tokenizer or accounting method appropriate to the target model, reserve space for the response, and trim low-value material when necessary. Token counts are model-dependent; character count is only a rough proxy.
+
+Ordering should serve the task. Relevance order is a useful default; chronological order may be clearer for timelines, while grouping by topic or source can help multi-part questions. Make the rule explicit and preserve dates when sequence matters. Avoid treating a single order as universally optimal.
+
+In experiments across tested models and tasks, Liu and colleagues found that performance could be stronger when relevant information appeared near the beginning or end of long contexts than when it appeared in the middle ([“Lost in the Middle,” TACL](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00638/119630/Lost-in-the-Middle-How-Language-Models-Use-Long)). This is a reason to test ordering and context length for the target model—not a guarantee that placing one passage first will solve retrieval or generation errors. In many cases, removing redundant passages is safer than making the context longer and relying on position alone.
+
+## Failure modes and handoff
+
+- **Too much context:** repeated or weak passages consume the input budget and can distract from useful evidence. Trim by evidence value, not just by rank cutoff.
+- **Too little context:** a selected chunk may omit a condition, definition, or link to another passage. Expand or retrieve supporting evidence, then preserve its provenance.
+- **Lost source identity:** merged text without source IDs makes later citations difficult to verify. Keep labels attached through formatting.
+- **Hidden conflict:** flattening different versions or dates into one passage can turn disagreement into a misleading apparent consensus.
+- **Ordering assumptions:** positional effects vary by model and task. Evaluate representative questions rather than treating relevance-first or chronology-first as a law.
+- **Budget overflow:** forgetting instructions, question, history, or reserved output space may cause truncation or failed requests. Budget the complete input, not just the evidence.
+
+The handoff is a compact, ordered, traceable packet of evidence. The next chapter explains how that packet is assembled with instructions, citation requirements, and the question—and why supplying evidence still does not guarantee a grounded answer.
+
+## References
+
+- [Liu et al., “Lost in the Middle: How Language Models Use Long Contexts” (TACL)](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00638/119630/Lost-in-the-Middle-How-Language-Models-Use-Long)

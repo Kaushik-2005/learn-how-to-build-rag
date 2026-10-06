@@ -1,0 +1,75 @@
+---
+title: Query Processing
+description: How a user's question is clarified, preserved, and shaped into a useful retrieval request.
+order: 8
+status: complete
+toc:
+  - From question to search request
+  - Normalize without erasing intent
+  - Rewrite and expand the query
+  - Hypothetical Document Embeddings
+  - Decompose multi-part questions
+  - Choose the lightest useful transformation
+  - Where query processing sits in the pipeline
+  - References
+---
+
+## From question to search request
+
+Query processing turns a user's wording into a search request while preserving the information they need. A fluent rewrite that drops a date, version, negation, or entity can send retrieval after the wrong evidence. This chapter covers those pre-retrieval transformations; the next covers how retrieval finds candidates.
+
+<RagIllustration kind="query-workbench" />
+
+Consider: “For Atlas v4, what changed in the 2025 retention policy, and which team owns rollout?” It contains an entity, version, time constraint, and two related information needs. A query processor may preserve those anchors, make the request more explicit, and split the dependent questions. The original wording should remain available for comparison and for the eventual answer.
+
+## Normalize without erasing intent
+
+Normalization handles superficial variation—such as whitespace, punctuation, known abbreviations, or a follow-up that needs conversation context. It is not universally safe: case folding can damage identifiers, and spelling correction can alter names or codes. Keep the raw question so changes can be inspected.
+
+A query may also be represented as fields such as topic, product, version, date, and requested facts. Treat these as an interpretation, not guaranteed user-supplied truth; resolve relative dates using a reference date and clarify ambiguity rather than silently guessing. Extracted constraints may guide search, but are not authorization: access must be enforced using trusted identity and policy data.
+
+## Rewrite and expand the query
+
+### Rewriting
+
+A rewrite makes a request easier to search—for example, restoring the subject of a follow-up—while retaining identifiers, dates, versions, negation, comparisons, and uncertainty. Keep the original beside the rewrite so the transformation can be checked. Rewrite-Retrieve-Read is one studied framing for this approach. [Ma et al., “Query Rewriting for Retrieval-Augmented Large Language Models”](https://arxiv.org/abs/2305.14283)
+
+### Expansion and multiple formulations
+
+Expansion adds alternate terms or formulations to bridge vocabulary mismatch, but added terms can drift from the user's intent. Multiple formulations express one information need; they are not separate subquestions. Query2doc, for example, appends generated pseudo-document text to the query. Its reported results are task- and dataset-specific, not a guarantee of improvement. [Wang et al., “Query2doc: Query Expansion with Large Language Models”](https://arxiv.org/abs/2303.07678)
+
+## Hypothetical Document Embeddings
+
+HyDE drafts a hypothetical answer-like passage, embeds it, then searches for **real** corpus documents near that vector. The draft is a search aid—not evidence—and may introduce false names, dates, or assumptions. HyDE can bridge a wording mismatch, but adds generation cost and may steer retrieval toward its own mistaken assumptions. [Gao et al., “Precise Zero-Shot Dense Retrieval without Relevance Labels”](https://arxiv.org/abs/2212.10496)
+
+Unlike Query2doc, which adds generated text to the query, HyDE uses the hypothetical passage's embedding as the dense-search representation.
+
+## Decompose multi-part questions
+
+Some requests need multiple pieces of evidence and a relationship between them. Decomposition makes those needs explicit. For the Atlas question:
+
+1. Find the changes introduced by the Atlas v4 retention policy for 2025.
+2. Identify which team owns rollout of those changes.
+
+The second step depends on what the first finds; searching independently could return an owner for a different initiative. Preserve dependencies and shared constraints. Self-Ask is one example of making follow-up questions explicit when external search is needed, not a guarantee of correct decomposition. [Press et al., “Measuring and Narrowing the Compositionality Gap in Language Models”](https://arxiv.org/abs/2210.03350)
+
+More subquestions mean more searches and candidates, plus more chances to miss a step or combine results incorrectly. Check the final evidence against the original question.
+
+## Choose the lightest useful transformation
+
+Use the lightest transformation that helps: a clear query may need none, while a follow-up may need reference resolution and a multi-hop question may need decomposition. More processing adds cost and failure points. For debugging, retain the original and transformed request plus the chosen operation, while handling sensitive query text according to privacy policy.
+
+The output is one or more search requests—not documents. Chapter 9 retrieves candidates; Chapter 10 compares and combines dense and sparse search.
+
+## Where query processing sits in the pipeline
+
+Query processing sits between the incoming question and retrieval. It can clarify the search request, but cannot create missing evidence or guarantee retrieval. Think of it as a careful editor: preserve the original and its constraints, changing only what helps search.
+
+<RagIllustration kind="query-position" />
+
+## References
+
+- [Ma et al., “Query Rewriting for Retrieval-Augmented Large Language Models”](https://arxiv.org/abs/2305.14283)
+- [Wang et al., “Query2doc: Query Expansion with Large Language Models”](https://arxiv.org/abs/2303.07678)
+- [Gao et al., “Precise Zero-Shot Dense Retrieval without Relevance Labels” (HyDE)](https://arxiv.org/abs/2212.10496)
+- [Press et al., “Measuring and Narrowing the Compositionality Gap in Language Models” (Self-Ask)](https://arxiv.org/abs/2210.03350)

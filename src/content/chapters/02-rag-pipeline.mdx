@@ -69,20 +69,9 @@ The representation is not a copy of the source's facts in a human-readable forma
 
 ### 6. Index or store
 
-The system stores the representation together with enough information to recover the content. The sketch below is a conceptual record in pseudocode, not a literal JSON schema:
+The system stores the representation together with enough information to recover the content. The illustration shows the conceptual relationship between a searchable representation, its chunk, and its provenance; it is not a literal JSON schema.
 
-```text
-record = {
-  representation,
-  chunk_text_or_reference,
-  source_id,
-  document_id,
-  location,
-  metadata,
-  version,
-  permissions
-}
-```
+<RagIllustration kind="record-cutaway" />
 
 The **index** determines how search is performed. The **store** holds records and metadata. A product may package both capabilities together, but they are different concepts. A vector index without recoverable text and provenance cannot by itself produce traceable context.
 
@@ -169,17 +158,9 @@ The query path is often called **online** because it responds to a user request.
 
 ## Document and query lifecycles
 
-A document lifecycle may look like this:
+Document indexing and query handling have separate lifecycles. A source is discovered, prepared, and indexed before later queries use that evidence; query processing, retrieval, and answer evaluation happen in response to requests. The illustration shows common stages and makes source updates and removals alternative branches, not mandatory steps every document passes through.
 
-```text
-discovered → loaded → prepared → chunked → indexed → updated → deleted
-```
-
-A query lifecycle may look like this:
-
-```text
-asked → interpreted → searched → filtered → reranked → contextualized → answered → evaluated
-```
+<RagIllustration kind="lifecycle-pair" />
 
 The two lifecycles meet through identifiers and versions. If the answer cites a chunk from an obsolete document version, the query may have retrieved a technically relevant but operationally invalid record.
 

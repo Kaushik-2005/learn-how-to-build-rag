@@ -1,0 +1,59 @@
+---
+title: RAG Failure Modes and Debugging
+description: Trace a bad answer through the pipeline and fix the earliest stage where the needed evidence was lost.
+order: 15
+status: complete
+toc:
+  - Start with the evidence trail
+  - Failures along the pipeline
+  - Diagnose from symptoms to cause
+  - Repair and prevent recurrence
+  - References
+---
+
+## Start with the evidence trail
+
+When a RAG answer is wrong, changing the prompt first is tempting—but the answer may be downstream of a missing source, failed extraction, or retrieval miss. Debug by following the expected evidence from the original source through each handoff. **Find the earliest stage where the correct evidence disappeared.** Later stages cannot faithfully use evidence that never reached them.
+
+<RagIllustration kind="debugging-map" />
+
+Keep one failing example as a trace: question and scope; source/version; extracted text; prepared document and metadata; chunk IDs; embedding/index version; query and filters; ranked candidate IDs; reranked list; final context; answer claims and citations. Inspect these artifacts rather than inferring the failure from the final prose alone.
+
+## Failures along the pipeline
+
+| Stage | Typical failure | Diagnostic clue |
+| --- | --- | --- |
+| Source | Needed knowledge is absent, stale, inaccessible, or the wrong version | The authoritative source does not contain the expected fact or current version |
+| Loading | Parser/OCR omits text, tables, headers, or reading order | Source contains it, extracted representation does not |
+| Preparation | Useful content is removed, metadata is lost, or duplicates remain | Extracted text is sound but prepared records are incomplete or noisy |
+| Chunking | Boundaries split a claim from its condition, or chunks are too broad/narrow | Correct text exists but retrieval units lack the needed relationships |
+| Embedding / index | Domain or language mismatch, stale vectors, incompatible query/document model, or index configuration | Relevant chunks exist but representation/search behavior is poor, often across many queries |
+| Retrieval / filters | Evidence falls below top-k, lexical identifiers are missed, or a filter excludes it | Correct chunk is indexed but absent from candidates; compare unfiltered diagnostics safely |
+| Reranking | Relevant candidate is demoted or candidate pool is too shallow | Evidence is in the retrieved set but falls out of the reranked cutoff |
+| Context | Passage is truncated, duplicated, reordered badly, or separated from its source | Candidate exists, final model input does not preserve it usefully |
+| Generation | Evidence is ignored, overgeneralized, or cited incorrectly | Supporting claim is present in the exact model input but not reflected correctly in output |
+
+These clues are hypotheses to test, not diagnoses by themselves. For example, a retrieval miss may originate in a loader that discarded the decisive table row. Conversely, seeing the passage in a trace does not prove the model attended to or correctly interpreted it.
+
+## Diagnose from symptoms to cause
+
+1. **Write the expected claim and source down.** Identify the exact version, location, and required scope. Verify that the source itself supports it.
+2. **Walk forward.** Check the extracted text, prepared record, chunk, indexed representation, candidate ranks, reranker output, and assembled context until the evidence is first missing or distorted.
+3. **Separate absence from ranking.** If the chunk never entered the index, improve ingestion. If it is indexed but not retrieved, investigate query, representation, filters, and candidate depth. If retrieved then removed, test reranking. If present in context but mishandled, investigate prompt/generation and claim-level citations.
+4. **Compare neighboring examples.** Determine whether the defect affects one document, a content type, one query pattern, a model/index version, or a broad population. Reproduce it with a small known test set.
+5. **Change the responsible stage and rerun regression tests.** Preserve before/after traces and check that the fix did not damage other query classes, latency, permissions, or freshness.
+
+Avoid “fixes” that conceal the fault: raising top-k can add noise without repairing a missing source; expanding every chunk can overrun context budgets; prompt wording cannot restore omitted evidence; and lowering similarity thresholds can increase false positives. A diagnosis should predict what artifact will change when the proposed fix is applied.
+
+## Repair and prevent recurrence
+
+Map recurring incidents to regression questions and expected evidence IDs. Keep answerable and unanswerable cases, source conflicts, stale-version questions, exact identifiers, and known extraction edge cases. Monitor ingestion failures and index freshness as well as query quality; a retrieval score cannot reveal that a required source was never loaded.
+
+Security-related failures deserve a separate path. Retrieved text is untrusted input: indirect prompt injection can arrive inside external material, and poisoned or misleading sources can be faithfully retrieved. OWASP documents prompt injection and data/model poisoning as LLM application risks; RAG is not an access-control or security boundary ([OWASP LLM Top 10 2025](https://genai.owasp.org/llm-top-10/)). Enforce permissions outside the model and investigate provenance, not just answer instructions.
+
+Use Chapter 14’s separate retrieval and generation measurements to establish whether a repair helped. The next chapter surveys advanced techniques—but each should be selected to address an identified bottleneck, not used as a substitute for diagnosis.
+
+## References
+
+- [Stanford, *Introduction to Information Retrieval*: evaluation and diagnostic foundations](https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-in-information-retrieval-1.html)
+- [OWASP Top 10 for LLM Applications 2025](https://genai.owasp.org/llm-top-10/)

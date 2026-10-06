@@ -1,0 +1,64 @@
+---
+title: Retrieval
+description: How dense and sparse search select a filtered, ranked set of evidence candidates.
+order: 9
+status: complete
+toc:
+  - Retrieval returns candidates
+  - Dense retrieval
+  - Sparse retrieval
+  - Metadata filters
+  - Top-k and candidate quality
+  - References
+---
+
+## Retrieval returns candidates
+
+Query processing prepares what to search for; retrieval searches the indexed corpus and returns passages that may help answer the question. It is a candidate-generation stage, not answer generation. A high-ranked passage can still be irrelevant, incomplete, stale, or wrong.
+
+<RagIllustration kind="retrieval-candidates" />
+
+Each candidate should remain connected to its text and provenance so later stages can inspect, rerank, cite, or reject it. Retrieved candidates are not automatically the final context: context construction decides what to give the model, and generation happens after that.
+
+## Dense retrieval
+
+Dense retrieval represents the query and each passage as vectors from compatible encoders. It compares the query vector with indexed passage vectors using the model's intended metric—often cosine similarity or dot product—and returns nearby candidates. Chapter 6 explains the representation and metrics; Chapter 7 explains exact and approximate vector indexes.
+
+Because the encoder can place related wording near each other, dense retrieval may find a passage that answers a question without sharing its exact words. Dense Passage Retrieval (DPR) is a research example: separate query and passage encoders are trained for question-to-passage search. Results depend on the training data and retrieval task; dense search is not universally better than lexical matching. [Karpukhin et al., “Dense Passage Retrieval for Open-Domain Question Answering”](https://aclanthology.org/2020.emnlp-main.550/)
+
+Nearest in vector space means nearest under that representation and metric—not necessarily most relevant to the user's exact need. An approximate nearest-neighbor index may also miss true neighbors in exchange for lower search cost. The returned list is therefore an initial candidate set, not a quality guarantee.
+
+## Sparse retrieval
+
+Sparse retrieval represents text through terms and their positions in an inverted index: for each term, the index records which documents contain it. Search uses query-term matches and a lexical scoring function to rank passages. Unlike dense retrieval, a sparse vector has many zero entries and only a small number of active term weights.
+
+Term frequency (TF) captures how often a query term appears in a passage. Inverse document frequency (IDF) gives more weight to terms found in fewer documents and less to terms found almost everywhere. TF-IDF combines these intuitions. [Manning, Raghavan, and Schütze, *Introduction to Information Retrieval*, chapters on term weighting](https://nlp.stanford.edu/IR-book/html/htmledition/irbook.html)
+
+BM25 is a widely used lexical ranking function. Informally, it rewards query-term matches, but limits the benefit of repeating the same term and adjusts for document length. Its score is a ranking signal, not a probability that a passage is relevant. [Robertson and Zaragoza, “The Probabilistic Relevance Framework: BM25 and Beyond”](https://doi.org/10.1561/1500000019)
+
+Lexical search can be especially useful for rare names, product IDs, version strings, and error codes: an embedding may retrieve passages about the same general topic while missing the exact identifier. Dense retrieval has the complementary strength of matching related wording. Neither method guarantees relevance; query wording, tokenization, corpus content, and ranking behavior all matter. Chapter 10 explains how systems can combine the two signals.
+
+## Metadata filters
+
+Metadata can restrict the searchable set by date, source, language, document type, version, or department. A filter answers “which records are eligible?”; the retrieval score answers “which eligible records rank highest?”
+
+Conceptually, a pre-filter restricts the set before or during candidate search. A post-filter removes records after an initial ranked set has been found. With post-filtering, the final list can contain fewer than `k` results even when more eligible records exist elsewhere in the index. Exact behavior depends on the index and implementation; Elasticsearch documents these as distinct filtered-kNN behaviors. [Elasticsearch, kNN query filtering](https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-knn-query)
+
+Access constraints need trusted enforcement in the retrieval/storage layer. A query processor may extract a tenant or department from text, but that interpretation must not grant access. Filters are also not interchangeable with relevance: an eligible result can still be a poor match.
+
+## Top-k and candidate quality
+
+The parameter `k` sets how many top-ranked candidates a search returns. A small `k` limits noise and downstream work, but can omit relevant evidence. A larger `k` may improve the chance of including useful passages while adding irrelevant material and more work for later stages. Approximate search can miss candidates before the cutoff as well.
+
+Candidate recall at `k` is the fraction of known-relevant passages that appear in the first `k` results. It measures retrieval coverage, not whether the final answer is correct. Inspect ranking quality and failure cases alongside it: a relevant passage below the cutoff is a miss, and a high-scoring but non-answering passage is a ranking error.
+
+Score thresholds can discard weak matches, but score scales vary with the model, metric, corpus, and search configuration. There is no universal cutoff. Calibrate thresholds on representative queries and include cases with no answer in the corpus; returning no candidate can be preferable to treating a weak match as evidence.
+
+The retriever's output is a ranked candidate set. Chapter 10 considers combining dense and sparse candidate lists; Chapter 11 covers reranking candidates with a more focused relevance model. Neither can recover evidence that the first retrieval stage failed to return.
+
+## References
+
+- [Karpukhin et al., “Dense Passage Retrieval for Open-Domain Question Answering” (EMNLP 2020)](https://aclanthology.org/2020.emnlp-main.550/)
+- [Manning, Raghavan, and Schütze, *Introduction to Information Retrieval*](https://nlp.stanford.edu/IR-book/html/htmledition/irbook.html)
+- [Robertson and Zaragoza, “The Probabilistic Relevance Framework: BM25 and Beyond”](https://doi.org/10.1561/1500000019)
+- [Elasticsearch, kNN query filtering](https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-knn-query)

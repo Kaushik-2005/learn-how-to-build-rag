@@ -1,5 +1,5 @@
 ---
-interface Props { kind: 'rag-basics' | 'cleaning' | 'chunking' | 'embeddings' | 'search-modes' | 'hnsw-layers' | 'ivf-pq' | 'sources' | 'vector-record' | 'context-flow' | 'loading-flow' | 'extract-structure' | 'chunk-position' | 'prep-flow' | 'embedding-flow' | 'recursive-flow' | 'decision-record'; label?: string; }
+interface Props { kind: 'rag-basics' | 'cleaning' | 'chunking' | 'embeddings' | 'hnsw-layers' | 'ivf-pq' | 'sources' | 'vector-record' | 'context-flow' | 'context-assembly' | 'bi-cross-encoders' | 'grounded-generation' | 'evaluation' | 'debugging-map' | 'advanced-patterns' | 'production-loop' | 'loading-flow' | 'extract-structure' | 'chunk-position' | 'prep-flow' | 'embedding-flow' | 'recursive-flow' | 'decision-record' | 'query-workbench' | 'query-position' | 'search-vs-rag' | 'record-cutaway' | 'lifecycle-pair' | 'vector-encoding' | 'similarity-metrics' | 'retrieval-candidates' | 'hybrid-fusion' | 'reranking'; label?: string; }
 const { kind, label } = Astro.props;
 const labels = {
   'rag-basics': 'Model memory complemented by retrieved, traceable external evidence',
@@ -12,18 +12,36 @@ const labels = {
   sources: 'Different source types becoming one document record',
   'vector-record': 'An embedding stored together with identity, provenance, metadata, and access constraints',
   'context-flow': 'Retrieved chunks expanded into final generation context',
+  'context-assembly': 'Relevant retrieved passages are selected, expanded, ordered, and packed into a source-traceable context within a token budget',
+  'bi-cross-encoders': 'Bi-encoders independently encode searchable queries and passages; cross-encoders jointly score each query-passage pair',
+  'grounded-generation': 'Instructions, a question, and source-labeled evidence form a prompt; generated claims are checked against supplied evidence or qualified',
+  evaluation: 'Retrieval relevance and generated-answer quality are measured separately on a fixed, traceable evaluation set',
+  'debugging-map': 'Follow evidence through the RAG pipeline and find the earliest stage where the correct evidence disappears',
+  'advanced-patterns': 'Choose advanced retrieval patterns to address specific bottlenecks, with added complexity and cost made visible',
+  'production-loop': 'Production RAG couples ingestion and versioned indexes with governed query serving, observability, and feedback',
   'loading-flow': 'A source loader extracting content and metadata into a document record',
   'extract-structure': 'Structured source content can lose relationships when flattened during extraction',
-  'chunk-position': 'Chunking placed between preparation and representation',
+  'chunk-position': 'Chunking highlighted between loading and embedding in the indexing path',
   'prep-flow': 'Raw source transformed into prepared text before chunking',
   'embedding-flow': 'Chunks and queries transformed into compatible vectors for search',
   'recursive-flow': 'Recursive chunking preserves larger boundaries before making smaller cuts',
-  'decision-record': 'A compact record of the boundaries, limits, overlap, and traceability rules for chunking'
+  'decision-record': 'A compact record of the boundaries, limits, overlap, and traceability rules for chunking',
+  'query-workbench': 'A raw multi-part question keeps its entities and constraints as it is separated into focused search questions',
+  'query-position': 'Query processing highlighted between the incoming question and retrieval in the query-time path',
+  'search-vs-rag': 'A search system returns ranked evidence while RAG turns retrieved evidence into a synthesized response',
+  'record-cutaway': 'A searchable representation is linked by record identity to recoverable text and source metadata',
+  'lifecycle-pair': 'Document indexing and query handling have separate lifecycles connected by IDs and versions',
+  'vector-encoding': 'Text enters an embedding encoder and becomes a model-specific numerical vector',
+  'similarity-metrics': 'Cosine, dot product, and Euclidean distance compare vectors using direction, alignment, and geometric separation',
+  'retrieval-candidates': 'A query ranks matching evidence passages and returns a limited candidate set rather than an answer',
+  'hybrid-fusion': 'Dense and sparse retrievers produce different ranked lists that are deduplicated and fused into a single candidate ranking',
+  reranking: 'A relevance model jointly scores retrieved query-passage pairs to reorder a shortlist, then diversity selection reduces redundancy'
 };
 const flowData: Record<string, { title: string; note: string; steps: string[]; active?: number }> = {
   'context-flow': { title: 'CONTEXT CONSTRUCTION / 05', note: 'retrieve precisely / expand carefully / format for generation', steps: ['Prepared document', 'Parent section', 'Child chunks', 'Retrieve candidates', 'Expand context', 'Final context'] },
   'loading-flow': { title: 'LOADER CONTRACT / 03', note: 'content + metadata + source identity + location', steps: ['Source system', 'Loader', 'Content', 'Metadata', 'Document record'], active: 1 },
-  'chunk-position': { title: 'PIPELINE POSITION / 05', note: 'each stage answers a different question', steps: ['Source', 'Loading', 'Cleaning', 'Chunking', 'Representation', 'Index'], active: 3 },
+  'chunk-position': { title: 'INDEXING PATH / 05', note: 'each stage answers a different question', steps: ['Sources', 'Loading', 'Preparation', 'Chunking', 'Embedding', 'Vector index'], active: 3 },
+  'query-position': { title: 'QUERY-TIME PATH / 08', note: 'shape the request before search / retrieval returns evidence candidates', steps: ['User question', 'Query processing', 'Query embedding', 'Candidate retrieval', 'Reranking', 'Context construction'], active: 1 },
   'prep-flow': { title: 'PREPARATION RECORD / 04', note: 'retain the artifacts needed to diagnose information loss', steps: ['Raw source', 'Extracted representation', 'Prepared representation', 'Ready to chunk'], active: 2 },
   'embedding-flow': { title: 'EMBEDDING FLOW / 06', note: 'same representation contract on both sides of search', steps: ['Text chunk', 'Encoder', 'Document vector', 'Query vector', 'Similarity', 'Candidates'] },
 };
@@ -57,6 +75,307 @@ const flow = flowData[kind as keyof typeof flowData];
       </section>
       <div class="memory-caption"><span>retrieval selects evidence for this question</span><b>answer can point back to the source</b></div>
     </div>
+  </>}
+
+  {kind === 'query-workbench' && <>
+    <div class="illustration-kicker">QUERY WORKBENCH / 08</div>
+    <div class="query-scene">
+      <div class="query-original"><small>RAW QUESTION</small><p>For <em>Atlas</em> <em>v4</em>, what changed in the <em>2025 retention policy</em>, and which team owns rollout?</p></div>
+      <div class="query-constraints"><small>KEEP THESE ANCHORS</small><span>product · Atlas</span><span>version · v4</span><span>time · 2025</span></div>
+      <div class="query-branches-label">SPLIT THE INFORMATION NEED</div>
+      <div class="query-branches">
+        <article><small>01 / CHANGE</small><strong>What changed in Atlas v4's retention policy for 2025?</strong><span>Locate the versioned policy evidence.</span></article>
+        <div class="query-dependency"><b>&darr;</b><span>use the identified change</span></div>
+        <article class="query-owner"><small>02 / RESPONSIBILITY</small><strong>Which team owns rolling out that policy change?</strong><span>Resolve the dependent entity.</span></article>
+      </div>
+    </div>
+    <p class="illustration-note">reshape the search request / preserve the user's constraints / keep the original question</p>
+  </>}
+
+  {kind === 'retrieval-candidates' && <>
+    <div class="illustration-kicker">RANKING EVIDENCE / 09</div>
+    <div class="retrieval-scene">
+      <section class="retrieval-query"><small>SEARCH REQUEST</small><strong>Who owns credential rotation?</strong><span>scope: current version · permitted records</span></section>
+      <div class="retrieval-match" aria-hidden="true"><i></i><i></i><i></i></div>
+      <section class="retrieval-pool">
+        <small>INDEXED PASSAGES / RANKED BY MATCH</small>
+        <article class="retrieval-hit selected"><b>01</b><span>Service credentials are rotated every 30 days by Identity Operations.</span><i>selected</i></article>
+        <article class="retrieval-hit selected"><b>02</b><span>Credential lifecycle and account ownership guide.</span><i>selected</i></article>
+        <article class="retrieval-hit selected"><b>03</b><span>Rotation exceptions for contracted service accounts.</span><i>selected</i></article>
+        <div class="retrieval-boundary"><span></span><small>TOP K / CANDIDATE CUTOFF</small><span></span></div>
+        <article class="retrieval-hit"><b>04</b><span>General password guidance for employees.</span><i>below cutoff</i></article>
+        <article class="retrieval-hit"><b>05</b><span>Unrelated travel reimbursement policy.</span><i>below cutoff</i></article>
+      </section>
+    </div>
+    <p class="illustration-note">ranked passages are evidence candidates / not yet final context or an answer</p>
+  </>}
+
+  {kind === 'hybrid-fusion' && <>
+    <div class="illustration-kicker">TWO RANKINGS / ONE CANDIDATE LIST / 10</div>
+    <div class="hybrid-query"><small>ONE SEARCH REQUEST</small><strong>For IAM-42, who owns 30-day credential rotation?</strong></div>
+    <div class="hybrid-scene">
+      <section class="hybrid-lane dense-lane">
+        <header><small>DENSE / MEANING</small><span>paraphrases can match</span></header>
+        <article><b>01</b><span>A · Service account rotation policy</span></article>
+        <article><b>02</b><span>C · Cloud key rotation guide</span></article>
+        <article><b>03</b><span>B · Identity Operations / IAM-42</span></article>
+      </section>
+      <div class="hybrid-join"><i></i><i></i><i></i><span>fuse<br/>ranks</span></div>
+      <section class="hybrid-lane sparse-lane">
+        <header><small>SPARSE / TERMS</small><span>exact IDs can match</span></header>
+        <article><b>01</b><span>B · Identity Operations / IAM-42</span></article>
+        <article><b>02</b><span>A · Service account rotation policy</span></article>
+        <article><b>03</b><span>D · Account access standard</span></article>
+      </section>
+      <section class="hybrid-result">
+        <header><small>FUSED CANDIDATES</small><span>same passage appears once</span></header>
+        <article class="fused-first"><b>01</b><span>A · Supported by both lists</span><i>dense 1 + sparse 2</i></article>
+        <article class="fused-second"><b>02</b><span>B · Exact ID + semantic match</span><i>dense 3 + sparse 1</i></article>
+        <div class="fused-tail">other candidates follow</div>
+      </section>
+    </div>
+    <p class="illustration-note">fusion reconciles rankings / it does not create evidence or verify relevance</p>
+  </>}
+
+  {kind === 'reranking' && <>
+    <div class="illustration-kicker">READ THE SHORTLIST AGAIN / 11</div>
+    <div class="rerank-query"><small>QUERY</small><strong>Who owns the 30-day credential rotation?</strong></div>
+    <div class="rerank-scene">
+      <section class="rerank-column">
+        <header><small>RETRIEVED CANDIDATES / 5</small><span>first-stage order</span></header>
+        <article><b>01</b><span>Credentials have a scheduled rotation policy.</span></article>
+        <article><b>02</b><span>Identity Operations owns 30-day rotation.</span></article>
+        <article class="redundant"><b>03</b><span>Duplicate: same owner and rotation rule.</span></article>
+        <article><b>04</b><span>Contractor accounts have a rotation exception.</span></article>
+        <article class="low-relevance"><b>05</b><span>General employee password guidance.</span></article>
+      </section>
+      <div class="rerank-reader"><i></i><i></i><i></i><b>score all 5<br/>query + passage</b><span>keep top 3</span></div>
+      <section class="rerank-column reranked-column">
+        <header><small>RERANKED / TOP 3</small><span>new relevance order</span></header>
+        <article class="rerank-best"><b>01</b><span>Identity Operations owns 30-day rotation.</span></article>
+        <article><b>02</b><span>Credentials have a scheduled rotation policy.</span></article>
+        <article><b>03</b><span>Contractor rotation exception.</span></article>
+      </section>
+    </div>
+    <div class="rerank-diversity"><small>DIVERSITY-AWARE SELECTION</small><span class="diversity-chip chosen">direct answer</span><b>+</b><span class="diversity-chip chosen">distinct supporting detail</span><span class="diversity-skip">duplicate left out</span></div>
+    <p class="illustration-note">rerank only what retrieval found / leave room for distinct evidence</p>
+  </>}
+
+  {kind === 'bi-cross-encoders' && <>
+    <div class="illustration-kicker">TWO WAYS TO COMPARE QUERY AND PASSAGE / 11</div>
+    <div class="encoder-compare">
+      <section class="encoder-mode bi-mode">
+        <header><small>BI-ENCODER</small><span>encode separately</span></header>
+        <div class="bi-route">
+          <div class="bi-inputs"><article><small>QUERY</small><b>rotation owner?</b></article><article><small>PASSAGE</small><b>30-day policy...</b></article></div>
+          <div class="bi-encoders"><span>query<br/>encoder</span><span>passage<br/>encoder</span></div>
+          <div class="bi-vectors"><i>q → [ .2, .8, … ]</i><i>d → [ .3, .7, … ]</i></div>
+        </div>
+        <div class="bi-index"><small>PASSAGE VECTORS STORED AHEAD</small><span>p₁ ··· p₂ ··· p₃ ··· pₙ</span></div>
+        <p>Compare vectors to search a large corpus.</p>
+      </section>
+      <section class="encoder-mode cross-mode">
+        <header><small>CROSS-ENCODER</small><span>score each pair jointly</span></header>
+        <div class="cross-pairs">
+          <article class="cross-pair high"><div><small>QUERY</small><b>rotation owner?</b><i>+</i><small>PASSAGE 02</small><b>Identity Ops owns rotation.</b></div><strong>high<br/>relevance</strong></article>
+          <article class="cross-pair"><div><small>QUERY</small><b>rotation owner?</b><i>+</i><small>PASSAGE 01</small><b>Rotation policy: 30 days.</b></div><strong>score</strong></article>
+        </div>
+        <p>Joint interaction is useful for scoring a bounded candidate set.</p>
+      </section>
+    </div>
+    <p class="illustration-note">separate vectors scale to corpus search / joint query–passage scoring refines retrieved candidates</p>
+  </>}
+
+  {kind === 'grounded-generation' && <>
+    <div class="illustration-kicker">EVIDENCE INTO A TRACEABLE ANSWER / 13</div>
+    <div class="generation-scene">
+      <section class="generation-prompt">
+        <header><small>ASSEMBLED PROMPT</small><span>clear roles · labeled evidence</span></header>
+        <article><b>INSTRUCTIONS</b><span>Answer from the supplied sources; cite each factual claim. If evidence is insufficient, say so.</span></article>
+        <article><b>QUESTION</b><span>Who owns rotation, and how often?</span></article>
+        <article class="generation-source"><b>[S1 · policy §3]</b><span>Identity Operations owns service-account rotation.</span></article>
+        <article class="generation-source"><b>[S2 · policy §3.2]</b><span>Credentials must rotate every 30 days.</span></article>
+      </section>
+      <div class="generation-bridge"><i></i><i></i><i></i><span>generate<br/>from context</span></div>
+      <section class="generation-output">
+        <header><small>ANSWER CLAIMS</small><span>trace each claim</span></header>
+        <article class="claim-supported"><b>SUPPORTED</b><span>Identity Operations owns rotation <em>[S1]</em>.</span></article>
+        <article class="claim-supported"><b>SUPPORTED</b><span>The interval is 30 days <em>[S2]</em>.</span></article>
+        <article class="claim-unsupported"><b>NOT IN EVIDENCE</b><span>“All teams follow this policy.”</span><i>omit · qualify · or abstain</i></article>
+      </section>
+    </div>
+    <p class="illustration-note">instructions guide generation / source-linked claims make support inspectable / neither guarantees truth</p>
+  </>}
+
+  {kind === 'evaluation' && <>
+    <div class="illustration-kicker">TWO SCORECARDS / ONE REPRODUCIBLE TEST SET / 14</div>
+    <div class="eval-question"><small>FIXED TEST QUERY</small><strong>Who owns rotation, and how often?</strong><span>known relevant evidence: S1 + S2</span></div>
+    <div class="eval-lanes">
+      <section class="eval-lane">
+        <header><small>RETRIEVAL</small><span>did evidence arrive?</span></header>
+        <div class="eval-results"><article class="eval-hit"><b>01</b><span>General credential guide</span></article><article class="eval-hit relevant"><b>02</b><span>Owner: Identity Operations [S1]</span></article><article class="eval-hit relevant"><b>03</b><span>Interval: 30 days [S2]</span></article></div>
+        <div class="eval-measures"><i>Recall@k</i><i>MRR</i><i>nDCG</i><i>latency</i></div>
+      </section>
+      <div class="eval-separator"><span>then</span></div>
+      <section class="eval-lane generation-lane">
+        <header><small>GENERATION</small><span>did answer use it well?</span></header>
+        <article class="eval-answer"><b>ANSWER</b><span>Identity Operations owns rotation [S1]. Interval: 30 days [S2].</span></article>
+        <div class="eval-measures"><i>correctness</i><i>faithfulness</i><i>citation support</i><i>abstention</i></div>
+      </section>
+    </div>
+    <p class="illustration-note">same queries and evidence labels / score retrieval and answer quality separately</p>
+  </>}
+
+  {kind === 'debugging-map' && <>
+    <div class="illustration-kicker">TRACE THE EVIDENCE / 15</div>
+    <div class="debug-question"><small>EXPECTED EVIDENCE</small><strong>Rotation owner: Identity Operations · source §3</strong></div>
+    <div class="debug-timeline">
+      <article class="debug-stage intact"><small>01 / SOURCE</small><b>present</b><span>policy §3</span></article><i>→</i>
+      <article class="debug-stage broken"><small>02 / LOADER</small><b>lost here</b><span>table row omitted</span></article><i>→</i>
+      <article class="debug-stage downstream"><small>03 / INDEX</small><b>not indexed</b><span>no matching chunk</span></article><i>→</i>
+      <article class="debug-stage downstream"><small>04 / RETRIEVAL</small><b>not found</b><span>candidate absent</span></article><i>→</i>
+      <article class="debug-stage downstream"><small>05 / ANSWER</small><b>unsupported</b><span>model guesses</span></article>
+    </div>
+    <div class="debug-lens"><span>START AT THE FIRST BROKEN TRACE</span><b>downstream symptoms are consequences, not the cause</b></div>
+    <p class="illustration-note">verify each handoff with source IDs, extracted text, chunks, ranked results, context, and claims</p>
+  </>}
+
+  {kind === 'advanced-patterns' && <>
+    <div class="illustration-kicker">A PATTERN IS A RESPONSE TO A BOTTLENECK / 16</div>
+    <div class="pattern-map">
+      <div class="pattern-core"><small>BASELINE RAG</small><strong>retrieve → rerank → construct context</strong><span>keep the simple path unless a measured need says otherwise</span></div>
+      <div class="pattern-branches">
+        <article><small>QUESTION IS AMBIGUOUS OR MULTI-PART</small><b>rewrite · route · decompose</b><span>more targeted searches ↗ more calls and query drift</span></article>
+        <article><small>PASSAGES NEED STRUCTURE OR CONTEXT</small><b>parent/child · windows · hierarchy</b><span>recover neighboring meaning ↗ larger or costlier context</span></article>
+        <article><small>ONE VECTOR SCORE IS TOO COARSE</small><b>multi-vector · late interaction</b><span>fine-grained matching ↗ storage and scoring work</span></article>
+        <article><small>RETRIEVAL MAY BE WEAK OR GLOBAL</small><b>CRAG · iterative · GraphRAG</b><span>correct, search again, or summarize relations ↗ complexity</span></article>
+        <article><small>NEED ADAPTIVE OR NON-TEXT EVIDENCE</small><b>Self-RAG · agentic · multimodal</b><span>reflect, plan, or align modalities ↗ control and safety burden</span></article>
+      </div>
+    </div>
+    <p class="illustration-note">identify the failure first / add only the mechanism that addresses it / measure its new costs</p>
+  </>}
+
+  {kind === 'production-loop' && <>
+    <div class="illustration-kicker">SERVE · OBSERVE · UPDATE · VERIFY / 17</div>
+    <div class="ops-scene">
+      <section class="ops-ingest"><small>CONTROLLED INGESTION</small><article><b>source change</b><span>version · permissions · provenance</span></article><article><b>build index vNext</b><span>extract · chunk · embed · validate</span></article><div class="ops-switch">validate → promote<br/>rollback if needed</div><article class="ops-active"><b>active index vN</b><span>known-good version remains recoverable</span></article></section>
+      <div class="ops-traffic"><span>authorized query traffic</span><b>→</b><span>retrieval + generation</span><b>→</b><span>traceable answer</span></div>
+      <section class="ops-controls"><article><small>ACCESS &amp; PRIVACY</small><b>identity · tenant · source ACL</b><span>enforce before evidence reaches context</span></article><article><small>OBSERVABILITY</small><b>latency · cost · retrieval trace</b><span>version every stage and model</span></article><article><small>QUALITY LOOP</small><b>evaluation · feedback · incidents</b><span>review → fix source stage → retest</span></article></section>
+      <div class="ops-feedback"><span>observed failures and reviewed feedback inform the next validated release</span><b>↶</b></div>
+    </div>
+    <p class="illustration-note">serve only governed, observable versions / feed measured failures into controlled updates</p>
+  </>}
+
+  {kind === 'context-assembly' && <>
+    <div class="illustration-kicker">FROM CANDIDATES TO MODEL CONTEXT / 12</div>
+    <div class="context-question"><small>QUESTION</small><strong>Who owns credential rotation, and what is its interval?</strong></div>
+    <div class="context-build">
+      <section class="context-evidence">
+        <header><small>RERANKED CANDIDATES</small><span>select · deduplicate · expand</span></header>
+        <article class="context-passage chosen"><b>01</b><span><strong>Identity Operations</strong> owns service-account rotation.</span><i>[policy §3]</i></article>
+        <article class="context-passage chosen"><b>02</b><span>Credentials must rotate every <strong>30 days</strong>.</span><i>[policy §3.2]</i></article>
+        <article class="context-passage context-duplicate"><b>03</b><span>Duplicate wording of the 30-day rule.</span><i>omitted</i></article>
+        <article class="context-passage context-conflict"><b>04</b><span>Older guide says <strong>60 days</strong>.</span><i>retain date / flag conflict</i></article>
+      </section>
+      <div class="context-bridge"><i></i><i></i><i></i><span>fit to<br/>budget</span></div>
+      <section class="context-packet">
+        <header><small>ASSEMBLED EVIDENCE</small><span>source labels retained</span></header>
+        <article><b>[policy §3]</b><span>Owner: Identity Operations.</span></article>
+        <article><b>[policy §3.2]</b><span>Interval: every 30 days.</span></article>
+        <article class="packet-conflict"><b>[guide · older]</b><span>Conflicting interval: 60 days; verify effective version.</span></article>
+        <div class="packet-budget"><span>CONTEXT ALLOCATION</span><i><b></b></i><strong>evidence + question + instructions &lt; input limit</strong></div>
+      </section>
+    </div>
+    <p class="illustration-note">preserve provenance and disagreement / spend the context budget on useful evidence</p>
+  </>}
+
+  {kind === 'vector-encoding' && <>
+    <div class="illustration-kicker">TEXT BECOMES COORDINATES / 06</div>
+    <div class="encoding-scene">
+      <section class="encoding-input"><small>TEXT CHUNK</small><strong>“Rotate the service credential every 30 days.”</strong><span>meaning-bearing input</span></section>
+      <div class="encoding-lens"><i></i><i></i><i></i><b>ENCODER</b></div>
+      <section class="encoding-output"><small>SCHEMATIC VECTOR VALUES</small><div><span>d₁</span><b>0.12</b></div><div><span>d₂</span><b>-0.04</b></div><div><span>d₃</span><b>0.77</b></div><div class="encoding-ellipsis">…</div><div><span>dₙ</span><b>…</b></div></section>
+    </div>
+    <p class="illustration-note">coordinates are learned signals across dimensions / they are not individually readable facts</p>
+  </>}
+
+  {kind === 'similarity-metrics' && <>
+    <div class="illustration-kicker">THREE VIEWS OF VECTOR SIMILARITY / 06</div>
+    <div class="metric-grid">
+      <section class="metric-panel">
+        <small>01 / COSINE</small>
+        <strong class="metric-formula">cos(q,d) = <span>q · d</span> / (<i>‖q‖ ‖d‖</i>)</strong>
+        <svg viewBox="0 0 180 110" aria-hidden="true"><line class="metric-axis" x1="20" y1="90" x2="164" y2="90"/><line class="metric-vector" x1="28" y1="84" x2="137" y2="34"/><line class="metric-vector soft" x1="28" y1="84" x2="133" y2="69"/><path class="metric-arc" d="M65 59 A45 45 0 0 1 72 77"/><circle class="metric-origin" cx="28" cy="84" r="4"/><text x="140" y="32">q</text><text x="136" y="72">d</text><text class="metric-label" x="61" y="78">θ</text></svg>
+        <p>Compare direction; vector length is normalized away.</p>
+      </section>
+      <section class="metric-panel">
+        <small>02 / DOT PRODUCT</small>
+        <strong class="metric-formula">q · d = Σ q<sub>i</sub>d<sub>i</sub><span>q · d = ‖q‖ ‖d‖ cos θ</span></strong>
+        <svg viewBox="0 0 180 110" aria-hidden="true"><line class="metric-axis" x1="20" y1="90" x2="164" y2="90"/><line class="metric-vector" x1="28" y1="84" x2="151" y2="84"/><line class="metric-vector soft" x1="28" y1="84" x2="112" y2="32"/><line class="metric-projection" x1="112" y1="32" x2="112" y2="84"/><circle class="metric-origin" cx="28" cy="84" r="4"/><circle class="metric-proj-dot" cx="112" cy="84" r="4"/><text x="151" y="88">q</text><text x="115" y="29">d</text><text class="metric-label" x="117" y="62">projection</text></svg>
+        <p>Alignment × magnitude both contribute.</p>
+      </section>
+      <section class="metric-panel">
+        <small>03 / EUCLIDEAN</small>
+        <strong class="metric-formula">‖q-d‖₂ = √Σ(q<sub>i</sub>-d<sub>i</sub>)²</strong>
+        <svg viewBox="0 0 180 110" aria-hidden="true"><line class="metric-axis" x1="20" y1="90" x2="164" y2="90"/><line class="metric-axis vertical" x1="28" y1="18" x2="28" y2="96"/><line class="metric-guide" x1="48" y1="76" x2="48" y2="90"/><line class="metric-guide" x1="132" y1="34" x2="132" y2="90"/><line class="metric-distance" x1="48" y1="76" x2="132" y2="34"/><circle class="metric-origin" cx="48" cy="76" r="4.2"/><circle class="metric-proj-dot" cx="132" cy="34" r="4.2"/><text x="34" y="82">q</text><text x="138" y="34">d</text><text class="metric-label metric-distance-label" x="74" y="43">‖q-d‖₂</text></svg>
+        <p>Measure straight-line separation in the space.</p>
+      </section>
+    </div>
+    <div class="metric-takeaway">
+      <div class="metric-takeaway-head"><small>KEY IDEA</small><span>FOR UNIT VECTORS</span></div>
+      <div class="metric-ranking"><strong>cosine ↑</strong><b>≡</b><strong>dot product ↑</strong><b>≡</b><strong>Euclidean distance ↓</strong></div>
+      <p>Same nearest-neighbor ranking.</p>
+      <div class="metric-identities"><span>q · d = cos(q,d)</span><span>‖q-d‖² = 2 - 2(q · d)</span></div>
+      <small class="metric-explanation">Cosine and dot product rank larger values first; Euclidean distance gives the same order when smaller values rank first.</small>
+    </div>
+  </>}
+
+  {kind === 'search-vs-rag' && <>
+    <div class="illustration-kicker">TWO WAYS TO USE SEARCH / 01</div>
+    <div class="search-rag-scene">
+      <div class="shared-question"><small>THE SAME QUESTION</small><strong>Who owns credential rotation?</strong></div>
+      <section class="search-rag-panel">
+        <small>SEARCH</small>
+        <div class="result-sheet"><b>01</b><span>Service account policy</span><i>source · section 3</i></div>
+        <div class="result-sheet secondary"><b>02</b><span>Credential operations guide</span><i>source · section 1</i></div>
+        <p>ranked evidence for a person to inspect</p>
+      </section>
+      <div class="compare-mark"><span>same retrieved evidence</span><b>&rarr;</b></div>
+      <section class="search-rag-panel rag-response">
+        <small>RAG</small>
+        <div class="evidence-slip"><b>CONTEXT</b><span>Policy passage + source references</span></div>
+        <div class="response-slip"><b>GENERATED RESPONSE</b><span>“Answer synthesizes the passages…”</span><i>should trace back to retrieved evidence</i></div>
+      </section>
+    </div>
+    <p class="illustration-note">search presents the result list / RAG adds context construction and generation—not a guarantee of support</p>
+  </>}
+
+  {kind === 'record-cutaway' && <>
+    <div class="illustration-kicker">RETRIEVABLE RECORD / 02</div>
+    <div class="record-cutaway-scene">
+      <section class="record-representation"><small>SEARCH REPRESENTATION</small><strong>[ 0.12, -0.44, 0.87, ... ]</strong><div class="term-marks"><i></i><i></i><i></i><i></i><i></i></div><span>dense vector or sparse terms</span></section>
+      <div class="record-link"><small>SHARED ID</small><b>⇄</b><span>chunk-042</span></div>
+      <section class="record-content"><small>RECOVERABLE CONTENT</small><strong>Credential rotation policy</strong><p>Service account credentials must be rotated at the required interval…</p></section>
+      <div class="record-provenance"><small>PROVENANCE + METADATA</small><span>source: access-policy.pdf</span><span>location: §3 · p. 4</span><span>version: v4</span><span>permissions: policy-controlled</span></div>
+    </div>
+    <p class="illustration-note">the index finds a record / its ID reconnects the match to text, source, and governing metadata</p>
+  </>}
+
+  {kind === 'lifecycle-pair' && <>
+    <div class="illustration-kicker">TWO CONNECTED LIFECYCLES / 02</div>
+    <div class="lifecycle-scene">
+      <section class="lifecycle-lane document-lane">
+        <header><small>DOCUMENT</small><strong>Indexing and source change</strong></header>
+        <div class="lifecycle-steps"><span>Discovered</span><b>&rarr;</b><span>Loaded</span><b>&rarr;</b><span>Prepared</span><b>&rarr;</b><span>Chunked</span><b>&rarr;</b><span class="lifecycle-active">Indexed</span></div>
+        <div class="lifecycle-branches"><i></i><span><b>Source changes</b> refresh affected records</span><span><b>Source removed</b> retire or delete records</span></div>
+      </section>
+      <div class="lifecycle-join"><span></span><b>IDs + versions connect stored evidence to answers</b><span></span></div>
+      <section class="lifecycle-lane query-lane">
+        <header><small>QUERY</small><strong>One request through answer and evaluation</strong></header>
+        <div class="lifecycle-steps"><span>Asked</span><b>&rarr;</b><span>Interpreted</span><b>&rarr;</b><span>Retrieved</span><b>&rarr;</b><span>Optional filter</span><b>&rarr;</b><span>Reranked</span><b>&rarr;</b><span>Context built</span><b>&rarr;</b><span>Answered</span><b>&rarr;</b><span class="lifecycle-active">Evaluated</span></div>
+      </section>
+    </div>
+    <p class="illustration-note">indexing prepares and maintains evidence / each query consumes a versioned view of that evidence</p>
   </>}
 
   {kind === 'cleaning' && <>
@@ -205,4 +524,395 @@ const flow = flowData[kind as keyof typeof flowData];
   .is-extract-structure { min-height: 300px; padding: 4.5rem 1.4rem 1.2rem; }
   @media (max-width: 700px) { .is-extract-structure { min-height: 470px; } }
   @media (max-width: 700px) { .is-sources { min-height: 420px; }.is-sources .source-map-stage { position: relative; inset: auto; display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; padding: 3.5rem .8rem 2.5rem; }.is-sources .source-orbit { position: relative; grid-column: 1 / -1; left: auto; top: auto; width: 76px; height: 76px; margin: 0 auto .4rem; transform: none; }.is-sources .source-card { position: relative; inset: auto; white-space: normal; text-align: center; }.is-sources .illustration-note { bottom: .65rem; font-size: .58rem; }.rag-illustration:has(.flow-illustration) { min-height: 0; overflow: visible; }.rag-illustration .flow-illustration { position: relative; inset: auto; padding: 4.2rem 1.2rem 1rem; }.rag-illustration .flow-track { flex-direction: column; width: auto; min-width: 0; padding: .25rem 0; gap: .15rem; }.rag-illustration .flow-track span { flex: 0 0 auto; width: 100%; white-space: normal; text-align: left; }.rag-illustration .flow-track b { transform: rotate(90deg); line-height: 1; }.rag-illustration .flow-illustration .illustration-note { margin-top: .6rem; text-align: center; }.is-rag-basics { min-height: 0; padding: 4.2rem 1rem 1rem; }.memory-scene { grid-template-columns: 1fr; gap: .55rem; }.memory-model, .memory-library { min-height: 0; padding: .8rem; }.memory-orb { width: 62px; height: 62px; }.memory-question { min-height: 0; }.memory-caption { grid-column: auto; flex-direction: column; gap: .25rem; text-align: center; font-size: .58rem; }.extract-scene { grid-template-columns: 1fr; gap: .4rem; }.extract-table, .extract-output { min-height: 0; }.extract-lens { grid-template-columns: auto auto; }.extract-lens b { transform: rotate(90deg); }.is-extract-structure { min-height: 470px; }.search-comparison { grid-template-columns: 1fr; }.is-search-modes { min-height: 440px; }.search-field { min-height: 145px; }.is-hnsw-layers { min-height: 340px; }.hnsw-layer { min-height: 78px; }.is-ivf-pq { min-height: 440px; }.ivf-scene { grid-template-columns: 1fr; gap: .3rem; }.ivf-space { min-height: 170px; }.ivf-connector { display: flex; justify-content: center; }.ivf-connector b { transform: rotate(90deg); }.pq-strip { min-height: 115px; }.recursive-ladder { grid-template-columns: 1fr; gap: .2rem; }.recursive-step { min-height: 0; }.recursive-arrow { line-height: 1; transform: rotate(90deg); }.is-recursive-flow { min-height: 440px; } }
+  .is-query-workbench { min-height: 350px; padding: 4.4rem 1.3rem 1rem; }
+  .query-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(12rem, .85fr); gap: .8rem 1rem; width: min(100%, 850px); margin: 0 auto; }
+  .query-original { grid-column: 1 / -1; position: relative; padding: .85rem 1.1rem .9rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 4px 4px 0 var(--accent-bg); }
+  .query-original small, .query-constraints small, .query-branches-label, .query-branches article small { display: block; color: var(--accent); font: .58rem Consolas, monospace; letter-spacing: .12em; }
+  .query-original p { margin: .45rem 0 0; color: var(--ink); font-size: 1.05rem; line-height: 1.45; }
+  .query-original em { padding: 0 .12rem; background: var(--accent-bg); color: var(--accent); font-style: normal; }
+  .query-constraints { display: flex; align-content: start; align-items: center; flex-wrap: wrap; gap: .4rem; padding: .65rem .75rem; border-left: 1px solid var(--accent); background: color-mix(in srgb, var(--surface) 65%, transparent); }
+  .query-constraints small { flex: 0 0 100%; }
+  .query-constraints span { padding: .28rem .42rem; border: 1px solid var(--line); color: var(--ink-muted); font: .64rem Consolas, monospace; }
+  .query-branches-label { grid-column: 1 / -1; margin: .1rem 0 -.25rem; color: var(--ink-muted); }
+  .query-branches { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 2.2rem minmax(0, 1fr); align-items: stretch; gap: .65rem; }
+  .query-branches article { display: flex; min-height: 95px; flex-direction: column; justify-content: center; gap: .35rem; padding: .65rem .8rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }
+  .query-branches article.query-owner { border-color: var(--accent); background: var(--accent-bg); }
+  .query-branches article strong { color: var(--ink); font-size: .82rem; line-height: 1.35; }
+  .query-branches article span { color: var(--ink-muted); font-size: .67rem; }
+  .query-dependency { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .35rem; color: var(--accent); text-align: center; }
+  .query-dependency b { font-size: 1.25rem; font-weight: 400; line-height: 1; }
+  .query-dependency span { font: .52rem/1.3 Consolas, monospace; }
+  .is-query-workbench .illustration-note { position: relative; z-index: 1; margin-top: .8rem; }
+  @media (max-width: 700px) { .is-query-workbench { min-height: 0; padding: 4.2rem 1rem 1rem; }.query-scene { grid-template-columns: 1fr; gap: .55rem; }.query-original, .query-branches-label, .query-branches { grid-column: auto; }.query-original p { font-size: .94rem; }.query-branches { grid-template-columns: 1fr; gap: .35rem; }.query-branches article { min-height: 0; }.query-dependency { flex-direction: row; }.query-dependency b { transform: rotate(90deg); }.query-dependency span { font-size: .56rem; } }
+  .is-search-vs-rag { min-height: 350px; padding: 4.4rem 1.3rem 1rem; }
+  .search-rag-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 6rem minmax(0, 1fr); gap: .65rem; width: min(100%, 850px); margin: 0 auto; }
+  .shared-question { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .65rem .85rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }
+  .shared-question small, .search-rag-panel > small { color: var(--accent); font: .58rem Consolas, monospace; letter-spacing: .1em; }
+  .shared-question strong { color: var(--ink); font-size: .88rem; }
+  .search-rag-panel { display: flex; min-height: 195px; flex-direction: column; gap: .5rem; padding: .75rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 82%, transparent); }
+  .result-sheet { display: grid; grid-template-columns: 1.5rem 1fr; align-items: center; gap: .3rem .55rem; padding: .5rem; border: 1px solid var(--line); background: var(--paper); }
+  .result-sheet > b { grid-row: span 2; color: var(--accent); font: .65rem Consolas, monospace; }
+  .result-sheet > span { color: var(--ink); font-size: .74rem; }
+  .result-sheet > i { color: var(--ink-muted); font: .55rem Consolas, monospace; font-style: normal; }
+  .result-sheet.secondary { opacity: .76; }
+  .search-rag-panel > p { margin: auto 0 0; color: var(--ink-muted); font-size: .67rem; }
+  .compare-mark { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .45rem; color: var(--accent); text-align: center; }
+  .compare-mark span { font: .57rem/1.4 Consolas, monospace; }
+  .compare-mark b { font-size: 1.35rem; font-weight: 400; }
+  .evidence-slip, .response-slip { display: flex; flex-direction: column; gap: .32rem; padding: .6rem; border: 1px solid var(--line); background: var(--paper); }
+  .evidence-slip b, .response-slip b { color: var(--accent); font: .55rem Consolas, monospace; letter-spacing: .08em; }
+  .evidence-slip span, .response-slip span { color: var(--ink); font-size: .7rem; line-height: 1.35; }
+  .response-slip { flex: 1; border-color: var(--accent); background: var(--accent-bg); }
+  .response-slip i { color: var(--ink-muted); font: .55rem Consolas, monospace; font-style: normal; }
+  .is-search-vs-rag .illustration-note { margin-top: .75rem; }
+  .is-record-cutaway { min-height: 305px; padding: 4.4rem 1.3rem 1rem; }
+  .record-cutaway-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem minmax(0, 1fr); gap: .65rem; width: min(100%, 800px); margin: 0 auto; }
+  .record-representation, .record-content { display: flex; min-height: 125px; flex-direction: column; justify-content: center; gap: .55rem; padding: .8rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }
+  .record-representation > small, .record-content > small, .record-provenance > small { color: var(--accent); font: .56rem Consolas, monospace; letter-spacing: .08em; }
+  .record-representation > strong { color: var(--ink); font: .76rem Consolas, monospace; }
+  .record-representation > span { color: var(--ink-muted); font-size: .66rem; }
+  .term-marks { display: flex; gap: .3rem; }
+  .term-marks i { width: 14px; height: 6px; background: var(--line); }.term-marks i:nth-child(2), .term-marks i:nth-child(4) { background: var(--accent-bg); }
+  .record-link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem; color: var(--accent); text-align: center; }
+  .record-link small, .record-link span { font: .53rem Consolas, monospace; }.record-link b { font-size: 1.25rem; font-weight: 400; }
+  .record-content > strong { color: var(--ink); font-size: .84rem; }
+  .record-content > p { margin: 0; color: var(--ink-muted); font-size: .68rem; line-height: 1.35; }
+  .record-provenance { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; padding: .55rem .7rem; border-left: 2px solid var(--accent); background: var(--accent-bg); }
+  .record-provenance > small { flex: 0 0 100%; }
+  .record-provenance > span { padding: .22rem .35rem; color: var(--ink-muted); font: .57rem Consolas, monospace; }
+  .is-record-cutaway .illustration-note { margin-top: .7rem; }
+  .is-lifecycle-pair { min-height: 390px; padding: 4.4rem 1.3rem 1rem; }
+  .lifecycle-scene { position: relative; z-index: 1; display: grid; gap: .65rem; width: min(100%, 900px); margin: 0 auto; }
+  .lifecycle-lane { padding: .65rem .75rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 85%, transparent); }
+  .lifecycle-lane header { display: flex; align-items: baseline; gap: .6rem; margin-bottom: .55rem; }
+  .lifecycle-lane header small { color: var(--accent); font: .56rem Consolas, monospace; letter-spacing: .1em; }
+  .lifecycle-lane header strong { color: var(--ink-muted); font-size: .72rem; font-weight: 400; }
+  .lifecycle-steps { display: flex; align-items: center; justify-content: space-between; gap: .25rem; }
+  .lifecycle-steps span { flex: 1 1 0; padding: .38rem .22rem; border: 1px solid var(--line); background: var(--paper); color: var(--ink-muted); font-size: .64rem; line-height: 1.2; text-align: center; }
+  .lifecycle-steps span.lifecycle-active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+  .lifecycle-steps b { flex: 0 0 auto; color: var(--accent); font-size: .8rem; font-weight: 400; }
+  .lifecycle-branches { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: .55rem; margin: .55rem 0 0; padding-top: .35rem; border-top: 1px dashed var(--line); color: var(--ink-muted); font-size: .61rem; }
+  .lifecycle-branches i { position: absolute; top: -.55rem; right: 10%; width: 1px; height: .55rem; background: var(--accent); }
+  .lifecycle-branches span { padding: .28rem .4rem; border-left: 1px solid var(--accent); }
+  .lifecycle-branches span b { color: var(--ink); font-weight: 600; }
+  .lifecycle-join { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .6rem; color: var(--accent); font: .56rem Consolas, monospace; text-align: center; }
+  .lifecycle-join span { height: 1px; background: var(--line); }
+  .is-lifecycle-pair .illustration-note { margin-top: .65rem; }
+  @media (max-width: 700px) {
+    .is-search-vs-rag, .is-record-cutaway, .is-lifecycle-pair { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .search-rag-scene { grid-template-columns: 1fr; gap: .45rem; }.shared-question { grid-column: auto; flex-direction: column; align-items: flex-start; gap: .3rem; }.search-rag-panel { min-height: 0; }.compare-mark { flex-direction: row; }.compare-mark b { transform: rotate(90deg); }.search-rag-panel > p { margin-top: .2rem; }
+    .record-cutaway-scene { grid-template-columns: 1fr; gap: .4rem; }.record-link { flex-direction: row; }.record-link b { transform: rotate(90deg); }.record-provenance { grid-column: auto; }
+    .lifecycle-lane { padding: .55rem; }.lifecycle-lane header { flex-direction: column; gap: .2rem; }.lifecycle-steps { flex-direction: column; align-items: stretch; gap: .15rem; }.lifecycle-steps span { flex: auto; text-align: left; padding: .38rem .55rem; }.lifecycle-steps b { align-self: center; transform: rotate(90deg); line-height: 1; }.lifecycle-branches { flex-direction: column; align-items: stretch; margin: .45rem 0 0 1rem; }.lifecycle-branches i { display: none; }.lifecycle-join { grid-template-columns: 1fr; gap: .25rem; padding: .2rem 0; }.lifecycle-join span { width: 1px; height: .6rem; justify-self: center; }
+  }
+  .is-retrieval-candidates { min-height: 330px; padding: 4.3rem 1.3rem 1rem; }
+  .retrieval-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(155px, .8fr) 2.2rem minmax(0, 1.5fr); align-items: center; gap: .65rem; width: min(100%, 900px); margin: 0 auto; }
+  .retrieval-query { display: flex; min-height: 130px; flex-direction: column; justify-content: center; gap: .6rem; padding: .85rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }
+  .retrieval-query small, .retrieval-pool > small { color: var(--accent); font: .56rem Consolas, monospace; letter-spacing: .1em; }
+  .retrieval-query strong { color: var(--ink); font-size: .88rem; line-height: 1.4; }
+  .retrieval-query > span { color: var(--ink-muted); font: .58rem/1.45 Consolas, monospace; }
+  .retrieval-match { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 74px; }
+  .retrieval-match::before { position: absolute; top: 7px; bottom: 7px; width: 1px; background: var(--line); content: ''; }
+  .retrieval-match i { position: relative; width: 7px; height: 7px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .retrieval-match i:nth-child(2) { background: var(--accent); }
+  .retrieval-pool { display: grid; gap: .28rem; }
+  .retrieval-pool > small { margin-bottom: .12rem; }
+  .retrieval-hit { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr) auto; align-items: center; gap: .5rem; min-height: 34px; padding: .3rem .45rem; border: 1px solid var(--fainter); color: var(--ink-muted); }
+  .retrieval-hit > b { color: var(--ink-muted); font: .58rem Consolas, monospace; font-weight: 400; }
+  .retrieval-hit > span { font-size: .65rem; line-height: 1.3; }
+  .retrieval-hit > i { color: var(--ink-muted); font: .5rem Consolas, monospace; font-style: normal; white-space: nowrap; }
+  .retrieval-hit.selected { border-color: var(--accent-bg); border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent-bg) 48%, var(--surface)); color: var(--ink); }
+  .retrieval-hit.selected > b, .retrieval-hit.selected > i { color: var(--accent); }
+  .retrieval-boundary { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .55rem; margin: -.02rem 0; color: var(--accent); }
+  .retrieval-boundary span { height: 1px; background: var(--accent); opacity: .55; }
+  .retrieval-boundary small { font: .52rem Consolas, monospace; letter-spacing: .08em; }
+  .is-retrieval-candidates .illustration-note { margin-top: .65rem; }
+  .is-hybrid-fusion { min-height: 430px; padding: 4.3rem 1.3rem 1rem; }
+  .hybrid-query { position: relative; z-index: 1; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: .6rem; width: min(100%, 900px); margin: 0 auto .75rem; padding: .55rem .75rem; border-bottom: 1px solid var(--line); }
+  .hybrid-query small, .hybrid-lane header small, .hybrid-result header small { color: var(--accent); font: .56rem Consolas, monospace; letter-spacing: .1em; }
+  .hybrid-query strong { color: var(--ink); font-size: .82rem; font-weight: 400; }
+  .hybrid-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 3.6rem minmax(0, 1fr); align-items: center; gap: .55rem; width: min(100%, 900px); margin: 0 auto; }
+  .hybrid-lane { display: grid; align-content: start; gap: .28rem; padding: .65rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .hybrid-lane header, .hybrid-result header { display: flex; min-height: 1.4rem; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .25rem .55rem; margin-bottom: .1rem; }
+  .hybrid-lane header span, .hybrid-result header span { color: var(--ink-muted); font: .53rem Consolas, monospace; }
+  .hybrid-lane article, .hybrid-result article { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); align-items: center; gap: .45rem; min-height: 38px; padding: .36rem .45rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .hybrid-lane article b, .hybrid-result article b { color: var(--accent); font: .57rem Consolas, monospace; font-weight: 400; }
+  .hybrid-lane article span, .hybrid-result article span { color: var(--ink); font-size: .65rem; line-height: 1.3; }
+  .hybrid-join { position: relative; display: flex; min-height: 92px; flex-direction: column; align-items: center; justify-content: center; gap: .42rem; color: var(--accent); text-align: center; }
+  .hybrid-join::before, .hybrid-join::after { position: absolute; left: 50%; width: 1px; height: 1.25rem; background: var(--line); content: ''; }
+  .hybrid-join::before { top: 0; }.hybrid-join::after { bottom: 0; }
+  .hybrid-join i { width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .hybrid-join i:nth-child(2) { background: var(--accent); }
+  .hybrid-join span { font: .5rem/1.4 Consolas, monospace; }
+  .hybrid-result { display: grid; grid-column: 1 / -1; grid-template-columns: 1fr 1fr auto; align-items: center; gap: .35rem; padding: .55rem .65rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .hybrid-result header { grid-column: 1 / -1; margin-bottom: 0; }
+  .hybrid-result article { border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent-bg) 48%, var(--surface)); }
+  .hybrid-result article i { grid-column: 2; color: var(--ink-muted); font: .49rem Consolas, monospace; font-style: normal; }
+  .fused-tail { padding: .3rem; color: var(--ink-muted); font: .52rem Consolas, monospace; text-align: center; }
+  .is-hybrid-fusion .illustration-note { margin-top: .65rem; }
+  .is-reranking { min-height: 430px; padding: 4.3rem 1.3rem 1rem; }
+  .rerank-query { position: relative; z-index: 1; display: flex; width: min(100%, 880px); align-items: baseline; gap: .8rem; margin: 0 auto .7rem; padding: .45rem .65rem; border-bottom: 1px solid var(--line); }
+  .rerank-query small, .rerank-column header small, .rerank-diversity > small { color: var(--accent); font: .55rem Consolas, monospace; letter-spacing: .1em; }
+  .rerank-query strong { color: var(--ink); font-size: .78rem; font-weight: 400; }
+  .rerank-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 8.5rem minmax(0, 1fr); align-items: center; gap: .65rem; width: min(100%, 880px); margin: 0 auto; }
+  .rerank-column { display: grid; align-content: start; gap: .28rem; padding: .6rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .rerank-column header { display: flex; min-height: 1.45rem; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .2rem .4rem; margin-bottom: .1rem; }
+  .rerank-column header span { color: var(--ink-muted); font: .5rem Consolas, monospace; }
+  .rerank-column article { display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); align-items: center; gap: .4rem; min-height: 38px; padding: .34rem .42rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .rerank-column article b { color: var(--ink-muted); font: .56rem Consolas, monospace; font-weight: 400; }
+  .rerank-column article span { color: var(--ink-muted); font-size: .63rem; line-height: 1.3; }
+  .rerank-column .rerank-best { border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent-bg) 50%, var(--surface)); }
+  .rerank-column .rerank-best b, .rerank-column .rerank-best span { color: var(--accent); }
+  .rerank-column .redundant { border-style: dashed; opacity: .72; }
+  .rerank-column .low-relevance { opacity: .62; }
+  .rerank-reader { position: relative; display: flex; min-height: 190px; flex-direction: column; align-items: center; justify-content: center; gap: .48rem; padding: .55rem; border: 1px solid var(--accent); background: var(--paper); color: var(--accent); text-align: center; }
+  .rerank-reader::before, .rerank-reader::after { position: absolute; top: 50%; width: .75rem; height: 1px; background: var(--accent); content: ''; }
+  .rerank-reader::before { left: -.75rem; }.rerank-reader::after { right: -.75rem; }
+  .rerank-reader i { width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .rerank-reader i:nth-child(2) { background: var(--accent); }
+  .rerank-reader b { font: .5rem/1.45 Consolas, monospace; font-weight: 400; }
+  .rerank-reader span { padding-top: .35rem; border-top: 1px solid var(--line); font: .47rem Consolas, monospace; }
+  .rerank-diversity { position: relative; z-index: 1; display: flex; width: min(100%, 880px); align-items: center; justify-content: center; flex-wrap: wrap; gap: .4rem .65rem; margin: .7rem auto 0; padding: .5rem .3rem; border-block: 1px solid var(--line); }
+  .diversity-chip { padding: .3rem .45rem; border: 1px solid var(--line); color: var(--ink-muted); font-size: .6rem; }
+  .diversity-chip.chosen { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+  .rerank-diversity > b { color: var(--accent); font: .7rem Consolas, monospace; font-weight: 400; }
+  .diversity-skip { color: var(--ink-muted); font: .53rem Consolas, monospace; text-decoration: line-through; }
+  .is-reranking .illustration-note { margin-top: .55rem; }
+  .is-bi-cross-encoders { min-height: 390px; padding: 4.3rem 1.3rem 1rem; }
+  .encoder-compare { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; width: min(100%, 920px); margin: 0 auto; }
+  .encoder-mode { display: flex; min-width: 0; flex-direction: column; padding: .65rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .encoder-mode > header { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; padding-bottom: .45rem; border-bottom: 1px solid var(--line); }
+  .encoder-mode > header small, .bi-inputs article small, .bi-index small, .cross-pair small { color: var(--accent); font: .52rem Consolas, monospace; letter-spacing: .07em; }
+  .encoder-mode > header span { color: var(--ink-muted); font: .5rem Consolas, monospace; }
+  .bi-route { display: grid; grid-template-columns: minmax(0, 1fr) 4rem minmax(0, 1fr); align-items: center; gap: .38rem; padding: .55rem 0; }
+  .bi-inputs, .bi-encoders, .bi-vectors { display: grid; gap: .32rem; }
+  .bi-inputs article { display: grid; gap: .16rem; min-width: 0; padding: .36rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .bi-inputs article b, .cross-pair b { color: var(--ink); font-size: .58rem; font-weight: 400; line-height: 1.3; }
+  .bi-encoders span { display: grid; min-height: 35px; place-content: center; border: 1px solid var(--accent); color: var(--accent); font: .47rem/1.3 Consolas, monospace; text-align: center; }
+  .bi-vectors i { padding: .35rem .2rem; border-bottom: 1px solid var(--line); color: var(--ink-muted); font: .48rem Consolas, monospace; font-style: normal; white-space: nowrap; }
+  .bi-index { display: grid; gap: .3rem; margin-top: auto; padding: .4rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .bi-index > span { color: var(--ink-muted); font: .55rem Consolas, monospace; letter-spacing: .1em; text-align: center; }
+  .encoder-mode > p { margin: .45rem 0 0; color: var(--ink-muted); font-size: .58rem; line-height: 1.35; }
+  .cross-pairs { display: grid; gap: .38rem; padding: .55rem 0; }
+  .cross-pair { display: grid; grid-template-columns: minmax(0, 1fr) 3.35rem; align-items: center; gap: .4rem; padding: .38rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .cross-pair > div { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: .16rem .35rem; }
+  .cross-pair > div i { grid-column: 1 / -1; color: var(--accent); font: .48rem Consolas, monospace; font-style: normal; }
+  .cross-pair > strong { padding-left: .35rem; border-left: 1px solid var(--line); color: var(--ink-muted); font: .48rem/1.3 Consolas, monospace; font-weight: 400; text-align: center; }
+  .cross-pair.high { border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent-bg) 42%, var(--surface)); }
+  .cross-pair.high > strong { color: var(--accent); }
+  .is-bi-cross-encoders .illustration-note { margin-top: .6rem; }
+  .is-context-assembly { min-height: 455px; padding: 4.3rem 1.3rem 1rem; }
+  .context-question { position: relative; z-index: 1; display: flex; width: min(100%, 920px); align-items: baseline; gap: .75rem; margin: 0 auto .65rem; padding: .45rem .65rem; border-bottom: 1px solid var(--line); }
+  .context-question small, .context-evidence header small, .context-packet header small { color: var(--accent); font: .55rem Consolas, monospace; letter-spacing: .1em; }
+  .context-question strong { color: var(--ink); font-size: .78rem; font-weight: 400; }
+  .context-build { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem minmax(0, 1fr); align-items: center; gap: .55rem; width: min(100%, 920px); margin: 0 auto; }
+  .context-evidence, .context-packet { display: grid; align-content: start; gap: .3rem; padding: .6rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .context-evidence header, .context-packet header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .2rem .4rem; min-height: 1.35rem; margin-bottom: .12rem; }
+  .context-evidence header span, .context-packet header span { color: var(--ink-muted); font: .49rem Consolas, monospace; }
+  .context-passage { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr) auto; align-items: center; gap: .35rem; min-height: 38px; padding: .32rem .38rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .context-passage > b { color: var(--ink-muted); font: .53rem Consolas, monospace; font-weight: 400; }
+  .context-passage > span { color: var(--ink-muted); font-size: .6rem; line-height: 1.3; }
+  .context-passage > span strong { color: var(--ink); font-weight: 600; }
+  .context-passage > i { color: var(--ink-muted); font: .46rem Consolas, monospace; font-style: normal; text-align: right; }
+  .context-passage.chosen { border-left: 2px solid var(--accent); }
+  .context-passage.chosen > i { color: var(--accent); }
+  .context-passage.context-duplicate { border-style: dashed; opacity: .62; }
+  .context-passage.context-conflict { border-color: var(--accent-bg); background: color-mix(in srgb, var(--accent-bg) 35%, var(--surface)); }
+  .context-bridge { position: relative; display: flex; min-height: 80px; flex-direction: column; align-items: center; justify-content: center; gap: .4rem; color: var(--accent); text-align: center; }
+  .context-bridge::before, .context-bridge::after { position: absolute; top: 50%; width: .65rem; height: 1px; background: var(--line); content: ''; }
+  .context-bridge::before { left: 0; }.context-bridge::after { right: 0; }
+  .context-bridge i { width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .context-bridge i:nth-child(2) { background: var(--accent); }
+  .context-bridge span { font: .48rem/1.35 Consolas, monospace; }
+  .context-packet > article { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .45rem; min-height: 38px; align-items: center; padding: .35rem .4rem; border-bottom: 1px solid var(--fainter); }
+  .context-packet > article b { color: var(--accent); font: .48rem Consolas, monospace; font-weight: 400; }
+  .context-packet > article span { color: var(--ink); font-size: .59rem; line-height: 1.3; }
+  .context-packet > .packet-conflict { border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent-bg) 30%, var(--surface)); }
+  .packet-budget { display: grid; grid-template-columns: auto minmax(55px, 1fr); align-items: center; gap: .35rem .5rem; margin-top: .18rem; }
+  .packet-budget > span { color: var(--ink-muted); font: .47rem Consolas, monospace; letter-spacing: .05em; }
+  .packet-budget > i { height: 5px; border: 1px solid var(--line); }
+  .packet-budget > i b { display: block; width: 72%; height: 100%; background: var(--accent); }
+  .packet-budget > strong { grid-column: 1 / -1; color: var(--ink-muted); font: .48rem Consolas, monospace; font-weight: 400; }
+  .is-context-assembly .illustration-note { margin-top: .6rem; }
+  .is-grounded-generation { min-height: 430px; padding: 4.3rem 1.3rem 1rem; }
+  .generation-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 4rem minmax(0, .9fr); align-items: center; gap: .6rem; width: min(100%, 920px); margin: 0 auto; }
+  .generation-prompt, .generation-output { display: grid; align-content: start; gap: .32rem; padding: .65rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 89%, transparent); }
+  .generation-prompt header, .generation-output header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .2rem .4rem; min-height: 1.35rem; margin-bottom: .1rem; }
+  .generation-prompt header small, .generation-output header small { color: var(--accent); font: .53rem Consolas, monospace; letter-spacing: .08em; }
+  .generation-prompt header span, .generation-output header span { color: var(--ink-muted); font: .48rem Consolas, monospace; }
+  .generation-prompt > article { display: grid; grid-template-columns: 5.3rem minmax(0, 1fr); gap: .4rem; padding: .42rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .generation-prompt > article b { color: var(--ink-muted); font: .48rem Consolas, monospace; font-weight: 400; }
+  .generation-prompt > article span { color: var(--ink); font-size: .59rem; line-height: 1.35; }
+  .generation-prompt > .generation-source { border-left: 2px solid var(--accent); }
+  .generation-prompt > .generation-source b { color: var(--accent); }
+  .generation-bridge { position: relative; display: flex; min-height: 100px; flex-direction: column; align-items: center; justify-content: center; gap: .42rem; color: var(--accent); text-align: center; }
+  .generation-bridge::before, .generation-bridge::after { position: absolute; top: 50%; width: .6rem; height: 1px; background: var(--line); content: ''; }
+  .generation-bridge::before { left: 0; }.generation-bridge::after { right: 0; }
+  .generation-bridge i { width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .generation-bridge i:nth-child(2) { background: var(--accent); }
+  .generation-bridge span { font: .47rem/1.35 Consolas, monospace; }
+  .generation-output > article { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .35rem; padding: .45rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .generation-output > article b { color: var(--accent); font: .47rem Consolas, monospace; font-weight: 400; }
+  .generation-output > article span { color: var(--ink); font-size: .59rem; line-height: 1.35; }
+  .generation-output > article em { color: var(--accent); font: .55rem Consolas, monospace; font-style: normal; }
+  .generation-output > .claim-unsupported { border-style: dashed; opacity: .77; }
+  .generation-output > .claim-unsupported b, .generation-output > .claim-unsupported i { color: var(--ink-muted); }
+  .generation-output > .claim-unsupported i { grid-column: 2; font: .47rem Consolas, monospace; font-style: normal; }
+  .is-grounded-generation .illustration-note { margin-top: .6rem; }
+  .is-evaluation { min-height: 400px; padding: 4.3rem 1.3rem 1rem; }
+  .eval-question { position: relative; z-index: 1; display: flex; align-items: baseline; flex-wrap: wrap; gap: .45rem .7rem; width: min(100%, 900px); margin: 0 auto .65rem; padding: .42rem .6rem; border-bottom: 1px solid var(--line); }
+  .eval-question small, .eval-lane header small { color: var(--accent); font: .53rem Consolas, monospace; letter-spacing: .08em; }
+  .eval-question strong { color: var(--ink); font-size: .72rem; font-weight: 400; }
+  .eval-question span, .eval-lane header span { color: var(--ink-muted); font: .49rem Consolas, monospace; }
+  .eval-lanes { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 3.2rem 1fr; align-items: stretch; gap: .4rem; width: min(100%, 900px); margin: 0 auto; }
+  .eval-lane { display: flex; min-width: 0; flex-direction: column; gap: .45rem; padding: .6rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .eval-lane header { display: flex; align-items: baseline; justify-content: space-between; gap: .3rem; padding-bottom: .35rem; border-bottom: 1px solid var(--line); }
+  .eval-results { display: grid; gap: .25rem; }
+  .eval-hit { display: grid; grid-template-columns: 1.1rem 1fr; gap: .35rem; padding: .35rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .eval-hit b { color: var(--ink-muted); font: .5rem Consolas, monospace; font-weight: 400; }.eval-hit span { color: var(--ink-muted); font-size: .57rem; }
+  .eval-hit.relevant { border-left: 2px solid var(--accent); }.eval-hit.relevant b { color: var(--accent); }.eval-hit.relevant span { color: var(--ink); }
+  .eval-measures { display: flex; flex-wrap: wrap; gap: .24rem; margin-top: auto; padding-top: .35rem; border-top: 1px solid var(--line); }
+  .eval-measures i { padding: .2rem .3rem; border: 1px solid var(--line); color: var(--ink-muted); font: .45rem Consolas, monospace; font-style: normal; }
+  .eval-separator { display: grid; place-items: center; color: var(--accent); font: .5rem Consolas, monospace; writing-mode: vertical-rl; }
+  .eval-answer { display: grid; gap: .35rem; min-height: 92px; align-content: center; padding: .55rem; border: 1px solid var(--accent-bg); background: color-mix(in srgb, var(--accent-bg) 30%, var(--surface)); }
+  .eval-answer b { color: var(--accent); font: .5rem Consolas, monospace; font-weight: 400; }.eval-answer span { color: var(--ink); font-size: .61rem; line-height: 1.4; }
+  .is-evaluation .illustration-note { margin-top: .6rem; }
+  .is-debugging-map { min-height: 355px; padding: 4.3rem 1.3rem 1rem; }
+  .debug-question { position: relative; z-index: 1; display: flex; align-items: baseline; gap: .6rem; width: min(100%, 930px); margin: 0 auto .75rem; padding: .4rem .55rem; border-bottom: 1px solid var(--line); }
+  .debug-question small, .debug-stage small, .debug-lens span { color: var(--accent); font: .5rem Consolas, monospace; letter-spacing: .06em; }
+  .debug-question strong { color: var(--ink); font-size: .7rem; font-weight: 400; }
+  .debug-timeline { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .3rem; width: min(100%, 960px); margin: 0 auto; }
+  .debug-timeline > i { color: var(--line); font: .8rem Consolas, monospace; font-style: normal; }
+  .debug-stage { display: grid; min-height: 100px; align-content: center; gap: .35rem; padding: .5rem; border: 1px solid var(--line); background: var(--surface); }
+  .debug-stage b { color: var(--ink); font: .62rem Consolas, monospace; font-weight: 400; }
+  .debug-stage span { color: var(--ink-muted); font-size: .52rem; line-height: 1.3; }
+  .debug-stage.intact { border-top: 2px solid var(--line); }
+  .debug-stage.broken { border: 1px solid var(--accent); border-top-width: 3px; background: color-mix(in srgb, var(--accent-bg) 38%, var(--surface)); }
+  .debug-stage.broken b { color: var(--accent); }
+  .debug-stage.downstream { opacity: .58; }
+  .debug-lens { position: relative; z-index: 1; display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: .4rem .8rem; width: min(100%, 930px); margin: .75rem auto 0; padding: .5rem; border-block: 1px solid var(--line); }
+  .debug-lens b { color: var(--ink); font: .65rem Georgia, serif; font-weight: 400; }
+  .is-debugging-map .illustration-note { margin-top: .55rem; }
+  .is-advanced-patterns { min-height: 440px; padding: 4.3rem 1.3rem 1rem; }
+  .pattern-map { position: relative; z-index: 1; display: grid; grid-template-columns: .78fr 1.6fr; gap: .7rem; width: min(100%, 940px); margin: 0 auto; }
+  .pattern-core { display: flex; flex-direction: column; justify-content: center; gap: .55rem; padding: .8rem; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent-bg) 28%, var(--surface)); }
+  .pattern-core small, .pattern-branches article small { color: var(--accent); font: .48rem Consolas, monospace; line-height: 1.4; }
+  .pattern-core strong { color: var(--ink); font: .68rem/1.5 Consolas, monospace; font-weight: 400; }
+  .pattern-core span { color: var(--ink-muted); font-size: .57rem; line-height: 1.4; }
+  .pattern-branches { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem; }
+  .pattern-branches article { display: grid; align-content: center; gap: .22rem; padding: .42rem .5rem; border: 1px solid var(--line); background: var(--surface); }
+  .pattern-branches article b { color: var(--ink); font: .53rem/1.35 Consolas, monospace; font-weight: 400; }
+  .pattern-branches article span { color: var(--ink-muted); font-size: .49rem; line-height: 1.35; }
+  .is-advanced-patterns .illustration-note { margin-top: .6rem; }
+  .is-production-loop { min-height: 450px; padding: 4.3rem 1.3rem 1rem; }
+  .ops-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .9fr) minmax(110px, .48fr) minmax(0, 1fr); align-items: center; gap: .55rem; width: min(100%, 940px); margin: 0 auto; }
+  .ops-ingest, .ops-controls { display: grid; gap: .32rem; padding: .55rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .ops-ingest > small { color: var(--accent); font: .5rem Consolas, monospace; letter-spacing: .06em; }
+  .ops-ingest article, .ops-controls article { display: grid; gap: .16rem; padding: .38rem; border: 1px solid var(--fainter); background: var(--paper); }
+  .ops-ingest article b, .ops-controls article b { color: var(--ink); font: .53rem Consolas, monospace; font-weight: 400; }
+  .ops-ingest article span, .ops-controls article span { color: var(--ink-muted); font-size: .49rem; line-height: 1.3; }
+  .ops-ingest article.ops-active { border-left: 2px solid var(--accent); }
+  .ops-ingest article.ops-active b { color: var(--accent); }
+  .ops-switch { padding: .35rem; border-block: 1px solid var(--accent); color: var(--accent); font: .48rem/1.4 Consolas, monospace; text-align: center; }
+  .ops-traffic { display: grid; justify-items: center; gap: .35rem; color: var(--ink-muted); font: .48rem/1.35 Consolas, monospace; text-align: center; }
+  .ops-traffic b { color: var(--accent); font-size: .75rem; font-weight: 400; }
+  .ops-controls article small { color: var(--accent); font: .47rem Consolas, monospace; }
+  .ops-feedback { display: flex; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: .55rem; padding: .35rem .55rem 0; border-top: 1px solid var(--line); color: var(--ink-muted); font: .49rem Consolas, monospace; }
+  .ops-feedback b { color: var(--accent); font-size: 1rem; font-weight: 400; }
+  .is-production-loop .illustration-note { margin-top: .6rem; }
+  .is-vector-encoding { min-height: 245px; padding: 4.3rem 1.3rem 1rem; }
+  .encoding-scene { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) 7rem minmax(0, .85fr); align-items: center; gap: .8rem; width: min(100%, 800px); margin: 0 auto; }
+  .encoding-input, .encoding-output { display: flex; min-height: 125px; flex-direction: column; justify-content: center; gap: .55rem; padding: .8rem .9rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); }
+  .encoding-input small, .encoding-output > small { color: var(--accent); font: .57rem Consolas, monospace; letter-spacing: .1em; }
+  .encoding-input strong { color: var(--ink); font-size: .88rem; line-height: 1.4; }
+  .encoding-input > span { color: var(--ink-muted); font-size: .65rem; }
+  .encoding-lens { position: relative; display: grid; width: 76px; height: 76px; place-items: center; justify-self: center; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 8px var(--accent-bg); }
+  .encoding-lens b { z-index: 1; color: var(--accent); font: .52rem Consolas, monospace; letter-spacing: .06em; }
+  .encoding-lens i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--line); }.encoding-lens i:nth-child(1) { top: 15px; left: 19px; }.encoding-lens i:nth-child(2) { right: 12px; bottom: 24px; background: var(--accent); }.encoding-lens i:nth-child(3) { bottom: 13px; left: 29px; }
+  .encoding-output > div:not(:first-child) { display: grid; grid-template-columns: 2.2rem 1fr; gap: .5rem; color: var(--ink-muted); font: .61rem Consolas, monospace; }
+  .encoding-output > div b { color: var(--ink); font-weight: 400; }.encoding-output > div span { color: var(--accent); }
+  .encoding-output .encoding-ellipsis { display: block; color: var(--ink-muted); }
+  .is-vector-encoding .illustration-note { margin-top: .65rem; }
+  .is-similarity-metrics { min-height: 370px; padding: 4.3rem 1.15rem 1rem; }
+  .metric-grid { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; width: min(100%, 920px); margin: 0 auto; }
+  .metric-panel { display: flex; min-width: 0; flex-direction: column; padding: .65rem .75rem .55rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  .metric-panel > small { color: var(--accent); font: .56rem Consolas, monospace; letter-spacing: .09em; }
+  .metric-formula { display: block; min-height: 3.1rem; margin-top: .4rem; color: var(--ink); font: .73rem/1.35 Consolas, monospace; font-weight: 400; }
+  .metric-formula > span { display: block; margin-top: .12rem; color: var(--ink-muted); font-size: .67rem; text-align: center; }.metric-formula > i { font-style: normal; }
+  .metric-panel svg { display: block; width: 100%; height: 130px; margin: .1rem auto .2rem; overflow: visible; }
+  .metric-panel svg text { fill: var(--ink-muted); font: 10px Consolas, monospace; }
+  .metric-panel svg text.metric-label { fill: var(--accent); font-size: 9px; }
+  .metric-axis { stroke: var(--line); stroke-width: 1; }.metric-axis.vertical { stroke-dasharray: 2 3; }
+  .metric-vector { stroke: var(--accent); stroke-width: 2; }.metric-vector.soft { stroke: var(--ink-muted); stroke-width: 1.6; }
+  .metric-arc { fill: none; stroke: var(--accent); stroke-width: 1.8; }.metric-projection, .metric-guide { fill: none; stroke: var(--ink-muted); stroke-width: 1; stroke-dasharray: 3 3; }.metric-distance { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 2; }
+  .metric-origin { fill: var(--accent); }.metric-proj-dot { fill: var(--paper); stroke: var(--accent); stroke-width: 2; }
+  .metric-panel > p { margin: auto 0 0; color: var(--ink-muted); font-size: .64rem; line-height: 1.35; }
+  .is-similarity-metrics .metric-takeaway { position: relative; z-index: 1; display: grid; justify-items: center; gap: .4rem; width: min(100%, 920px); margin: .8rem auto 0; padding: .7rem .25rem; border-block: 1px solid var(--line); text-align: center; }
+  .is-similarity-metrics .metric-takeaway-head { display: flex; align-items: baseline; justify-content: center; gap: 1rem; }
+  .is-similarity-metrics .metric-takeaway-head small { color: var(--accent); font: .58rem Consolas, monospace; letter-spacing: .13em; }
+  .is-similarity-metrics .metric-takeaway-head span { color: var(--ink-muted); font: .58rem Consolas, monospace; letter-spacing: .08em; }
+  .is-similarity-metrics .metric-ranking { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; column-gap: .8rem; row-gap: .3rem; color: var(--ink); font: .76rem Consolas, monospace; }
+  .is-similarity-metrics .metric-ranking strong { font-weight: 500; }.is-similarity-metrics .metric-ranking b { color: var(--accent); font-weight: 400; }
+  .is-similarity-metrics .metric-takeaway > p { margin: 0; color: var(--ink); font: .78rem Georgia, serif; }
+  .is-similarity-metrics .metric-identities { display: flex; justify-content: center; flex-wrap: wrap; column-gap: 2rem; row-gap: .45rem; width: 100%; margin-top: .12rem; padding-top: .45rem; border-top: 1px solid var(--fainter); color: var(--ink); font: .69rem Consolas, monospace; }
+  .is-similarity-metrics .metric-identities span { display: inline-block; padding-inline: .25rem; }
+  .is-similarity-metrics .metric-explanation { display: block; max-width: 780px; margin-top: .1rem; color: var(--ink-muted); font: .59rem/1.5 Consolas, monospace; }
+  @media (max-width: 700px) {
+    .is-retrieval-candidates { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .retrieval-scene { grid-template-columns: 1fr; gap: .45rem; }
+    .retrieval-query { min-height: 0; }
+    .retrieval-match { height: 18px; flex-direction: row; justify-content: center; gap: .7rem; }
+    .retrieval-match::before { top: 50%; right: 25%; bottom: auto; left: 25%; width: auto; height: 1px; }
+    .retrieval-hit { grid-template-columns: 1.3rem minmax(0, 1fr) auto; gap: .35rem; padding: .32rem; }
+    .retrieval-hit > span { font-size: .62rem; }
+    .retrieval-hit > i { font-size: .47rem; }
+    .is-hybrid-fusion { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .hybrid-query { grid-template-columns: 1fr; gap: .25rem; margin-bottom: .5rem; }
+    .hybrid-scene { grid-template-columns: 1fr; gap: .4rem; }
+    .hybrid-join { min-height: 2rem; flex-direction: row; gap: .5rem; }
+    .hybrid-join::before, .hybrid-join::after { top: 50%; bottom: auto; left: 0; width: calc(50% - 2.1rem); height: 1px; }
+    .hybrid-join::after { right: 0; left: auto; }
+    .hybrid-result { grid-column: 1; grid-template-columns: 1fr; padding: .5rem; }
+    .hybrid-result header { grid-column: 1; }
+    .is-reranking { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .rerank-query { flex-direction: column; gap: .25rem; }
+    .rerank-scene { grid-template-columns: 1fr; gap: .4rem; }
+    .rerank-reader { min-height: 2.6rem; flex-direction: row; gap: .45rem; }
+    .rerank-reader span { padding: 0 0 0 .4rem; border-top: 0; border-left: 1px solid var(--line); }
+    .rerank-reader::before, .rerank-reader::after { top: 50%; right: auto; left: 0; width: calc(50% - 2.2rem); height: 1px; }
+    .rerank-reader::after { right: 0; left: auto; }
+    .rerank-diversity { gap: .35rem; }
+    .rerank-diversity > small { flex-basis: 100%; text-align: center; }
+    .is-context-assembly { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .context-question { flex-direction: column; gap: .25rem; }
+    .context-build { grid-template-columns: 1fr; gap: .35rem; }
+    .context-bridge { min-height: 2.3rem; flex-direction: row; gap: .4rem; }
+    .context-bridge::before, .context-bridge::after { top: 50%; right: auto; left: 0; width: calc(50% - 2rem); height: 1px; }
+    .context-bridge::after { right: 0; left: auto; }
+    .context-passage { grid-template-columns: 1rem minmax(0, 1fr) auto; }
+    .is-grounded-generation { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .generation-scene { grid-template-columns: 1fr; gap: .35rem; }
+    .generation-bridge { min-height: 2.3rem; flex-direction: row; gap: .4rem; }
+    .generation-bridge::before, .generation-bridge::after { top: 50%; right: auto; left: 0; width: calc(50% - 2rem); height: 1px; }
+    .generation-bridge::after { right: 0; left: auto; }
+    .is-evaluation, .is-debugging-map, .is-advanced-patterns, .is-production-loop { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .eval-lanes { grid-template-columns: 1fr; gap: .35rem; }
+    .eval-separator { min-height: 1.5rem; writing-mode: horizontal-tb; }
+    .debug-question { flex-direction: column; gap: .2rem; }
+    .debug-timeline { grid-template-columns: 1fr; gap: .18rem; }
+    .debug-timeline > i { justify-self: center; transform: rotate(90deg); line-height: 1; }
+    .debug-stage { min-height: 68px; }
+    .pattern-map { grid-template-columns: 1fr; gap: .4rem; }
+    .pattern-core { min-height: 100px; }
+    .pattern-branches { grid-template-columns: 1fr; }
+    .ops-scene { grid-template-columns: 1fr; gap: .35rem; }
+    .ops-traffic { grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: .2rem; }
+    .ops-traffic b { transform: rotate(90deg); }
+    .ops-feedback { justify-content: center; text-align: center; }
+    .ops-feedback b { transform: rotate(-90deg); }
+    .is-bi-cross-encoders { min-height: 0; padding: 4.2rem 1rem 1rem; }
+    .encoder-compare { grid-template-columns: 1fr; gap: .45rem; }
+    .bi-route { grid-template-columns: minmax(0, 1fr) 4rem minmax(0, 1fr); }
+    .is-vector-encoding { min-height: 0; padding: 4.2rem 1rem 1rem; }.encoding-scene { grid-template-columns: 1fr; gap: .45rem; }.encoding-input, .encoding-output { min-height: 0; }.encoding-lens { width: 58px; height: 58px; }.encoding-lens b { font-size: .48rem; }
+    .is-similarity-metrics { min-height: 0; padding: 4.2rem 1rem 1rem; }.metric-grid { grid-template-columns: 1fr; gap: .45rem; }.metric-panel { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; }.metric-panel > small, .metric-panel > p, .metric-formula, .metric-panel svg { grid-column: 1 / -1; }.metric-formula { min-height: 0; margin: .35rem 0; font-size: .76rem; }.metric-panel svg { width: min(100%, 300px); height: 140px; justify-self: center; }.metric-panel > p { margin: 0; }.is-similarity-metrics .metric-ranking { column-gap: .5rem; font-size: .68rem; }.is-similarity-metrics .metric-identities { column-gap: 1rem; font-size: .65rem; }.is-similarity-metrics .metric-explanation { font-size: .56rem; }
+  }
 </style>

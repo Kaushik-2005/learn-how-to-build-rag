@@ -1,0 +1,69 @@
+---
+title: RAG Evaluation
+description: Measure retrieval and generated answers separately, then use traces to locate what needs improvement.
+order: 14
+status: complete
+toc:
+  - Why evaluate stages separately
+  - Retrieval metrics
+  - Generation metrics
+  - Build a useful test set
+  - Evaluation methods and limits
+  - References
+---
+
+## Why evaluate stages separately
+
+A fluent answer can hide a retrieval failure, and a strong candidate list can be followed by a poorly grounded answer. Evaluate the retriever and generator separately, then evaluate the end-to-end response. This makes a score diagnostically useful: it helps distinguish “the evidence was not found” from “the answer did not use the evidence well.”
+
+<RagIllustration kind="evaluation" />
+
+For each test question, preserve a trace of the query, filters, retrieved IDs and ranks, reranked candidates, assembled context, model/prompt versions, answer, and citations. Compare system changes on the same representative questions and relevance labels. A single aggregate score is not a substitute for examining regressions and failure cases.
+
+## Retrieval metrics
+
+Create relevance judgments for a query and candidate passage set. “Relevant” should reflect the task: a passage can be topically related without containing the evidence needed to answer the question.
+
+- **Hit rate@k:** the share of test queries for which at least one relevant passage appears in the first `k` results. Useful when one sufficient passage is enough.
+- **Precision@k:** relevant passages among the first `k`, divided by `k`. It captures how much of the shortlist is useful.
+- **Recall@k:** known relevant passages found in the first `k`, divided by all known relevant passages. It measures whether evidence is being missed, but depends on the completeness of the judgments.
+- **MRR (Mean Reciprocal Rank):** for each query, take the reciprocal of the rank of its first relevant result, then average. It rewards finding one good result early.
+- **MAP (Mean Average Precision):** averages precision at the ranks where relevant results occur, then averages across queries. It is useful when many relevant passages matter.
+- **nDCG (normalized discounted cumulative gain):** supports graded relevance and rewards highly relevant passages appearing earlier, with lower gain for later ranks. The original cumulative-gain work formalizes ranking quality with graded judgments and position discounts ([Järvelin and Kekäläinen, 2002](https://doi.org/10.1145/582415.582418)).
+
+Also measure **candidate recall** at the handoff to reranking/context construction and retrieval latency. Metrics answer different questions: high recall with low precision can give later stages a noisy context, while high precision with low recall may omit needed supporting facts. Use the cutoff and metric that match the intended task. Definitions and standard IR evaluation cautions are covered in Stanford’s [Introduction to Information Retrieval](https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-in-information-retrieval-1.html).
+
+## Generation metrics
+
+Judge answer properties separately rather than compressing them into the vague label “good”:
+
+- **Correctness:** is the answer factually right according to trusted references?
+- **Faithfulness / groundedness:** are its claims supported by the supplied context? A faithful answer can still repeat a wrong source, so this is not identical to truth.
+- **Relevance:** does it answer the user’s actual question at an appropriate level of detail?
+- **Completeness:** does it address every requested part without adding unsupported scope?
+- **Citation correctness:** does each citation point to a real source that supports the adjacent claim?
+- **Citation completeness:** are the claims that need attribution actually cited?
+- **Abstention quality:** does the system answer when evidence is sufficient and refrain or qualify when it is not?
+
+These measures can disagree. An answer may be relevant but unsupported, or faithful to a stale passage but incorrect under the current policy. RAG evaluation frameworks such as [ARES](https://aclanthology.org/2024.naacl-long.20/) and [RAGAS](https://arxiv.org/abs/2309.15217) provide examples of decomposing evaluation into distinct dimensions; their scores are measurements under particular judge, data, and protocol choices, not universal truth meters.
+
+## Build a useful test set
+
+A useful evaluation record can include the question, answerability, expected answer or grading criteria, relevant source/chunk IDs, permitted scope and version, and known difficult negatives. Include multi-part questions, exact identifiers, paraphrases, unanswerable questions, conflicting sources, and version-sensitive cases. Sample real usage where appropriate, while protecting private information and recording how examples were selected.
+
+Reference answers need not dictate exact wording. For open-ended tasks, define factual points, acceptable alternatives, required evidence, and unacceptable overclaims. Have domain reviewers validate labels: incorrect “gold” labels make comparisons misleading. Keep a held-out set for final comparisons where repeated tuning against the same examples would otherwise overfit the evaluation.
+
+## Evaluation methods and limits
+
+Use the least ambiguous method that answers the question. Deterministic checks work for structured output, exact citation IDs, schema validity, and known constraints. Human review is important for nuanced correctness, usefulness, and ambiguous evidence, but requires consistent rubrics and reviewer calibration. Model-as-judge can help triage or scale rubric-based review, yet judge models can be biased by answer length, style, position, or their own errors. Validate judges against human-annotated examples and report the method, not just its score.
+
+Run stage-by-stage experiments: retrieval-only with labeled candidates; reranking against the same candidate pool; context checks for duplication, omissions, and token truncation; generation with fixed evidence; and end-to-end response review. Change one meaningful factor at a time when diagnosing. Track latency and cost alongside quality, and inspect per-query results—not only averages.
+
+The next chapter uses these traces to debug failures from the first stage where correct evidence disappears or the answer stops preserving it.
+
+## References
+
+- [Manning, Raghavan, and Schütze, *Introduction to Information Retrieval*, Chapter 8](https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-in-information-retrieval-1.html)
+- [Järvelin and Kekäläinen, “Cumulated Gain-based Evaluation of IR Techniques” (2002)](https://doi.org/10.1145/582415.582418)
+- [Saad-Falcon et al., “ARES: An Automated Evaluation Framework for Retrieval-Augmented Generation Systems” (NAACL 2024)](https://aclanthology.org/2024.naacl-long.20/)
+- [Es et al., “RAGAS: Automated Evaluation of Retrieval Augmented Generation”](https://arxiv.org/abs/2309.15217)

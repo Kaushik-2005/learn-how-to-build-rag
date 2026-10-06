@@ -1,0 +1,59 @@
+---
+title: Production RAG
+description: Operate RAG as a versioned, observable, access-controlled data system—not just a retrieval prompt.
+order: 17
+status: complete
+toc:
+  - From prototype to operated system
+  - Keep ingestion and indexes current
+  - Serve within latency and cost budgets
+  - Protect data and model boundaries
+  - Observe, evaluate, and recover
+  - References
+---
+
+## From prototype to operated system
+
+A prototype can load a corpus once and answer a few questions. A production system must keep its evidence current, apply permissions, meet service expectations, expose failures, protect sensitive data, and recover safely from changes. These requirements shape the architecture around the RAG pipeline; they do not require a particular database, framework, or deployment style.
+
+<RagIllustration kind="production-loop" />
+
+Think in two connected paths: a governed ingestion path that produces a versioned index, and an authorized query path that uses it. Observability and evaluation connect actual behavior back to controlled updates.
+
+## Keep ingestion and indexes current
+
+Treat ingestion as a repeatable pipeline. Track source identity, version, modification time, extraction status, chunking and embedding configuration, and index build version. Incremental ingestion should detect additions, updates, and deletions; retries should not create duplicate records. A source update may require re-extraction, re-chunking, or re-embedding—not only changing metadata.
+
+Embedding-model migrations change the representation contract. Do not compare vectors from incompatible models as if they shared a space. Build a compatible new index or namespace, validate it with the evaluation set, and promote it deliberately. Keeping the prior known-good index available until validation supports rollback, while dual storage and rebuilds add temporary storage and processing cost.
+
+Deletion needs end-to-end accounting: remove or tombstone records in active indexes, caches, derived summaries, and other retained copies according to the system’s requirements. Verify that stale chunks cannot still be retrieved after source revocation or removal. Backups and audit logs need explicit retention and access policies too.
+
+## Serve within latency and cost budgets
+
+Measure end-to-end and per-stage latency, including query processing, each retrieval branch, reranking, context construction, and generation. Averages alone can hide slow requests; examine tail latency (for example, high-percentile response times) and failure rates by stage. Track throughput and resource use under realistic concurrency rather than assuming a fast isolated query predicts service behavior.
+
+Batching may improve throughput but can increase waiting time for an individual request. Caching can reduce repeated work, but keys and invalidation must account for query normalization, index/model version, metadata filters, tenant, and permissions; a cache hit must not bypass authorization or return stale evidence. Track costs by stage and workload so an added reranking or multi-query step has an explicit budget.
+
+## Protect data and model boundaries
+
+Enforce source permissions before content reaches the model. Apply user/tenant access checks at retrieval and re-check any parent expansion, cache hit, or secondary search. Metadata filters supplied or inferred from query text are not authorization decisions, and prompt instructions cannot enforce access control. NIST’s Zero Trust Architecture describes per-request, least-privilege access decisions as a core security approach ([NIST SP 800-207](https://doi.org/10.6028/NIST.SP.800-207)).
+
+Retrieved documents are untrusted data. A malicious instruction embedded in a source can act as indirect prompt injection; poisoned content can also bias the answer. Separate evidence from system instructions, limit tool capabilities, validate outputs before downstream use, and test with adversarial documents. OWASP notes that RAG does not fully mitigate prompt injection ([OWASP LLM Top 10 2025](https://genai.owasp.org/llm-top-10/)).
+
+Minimize sensitive data in embeddings, prompts, logs, and evaluation traces. Define what is retained, who can inspect it, how redaction works, and how deletion propagates. Preserve auditability without logging more personal or confidential content than necessary. Tenant isolation must apply to source storage, indexes, caches, prompts, and diagnostic tools—not merely the user interface.
+
+## Observe, evaluate, and recover
+
+Record a privacy-aware trace of the pipeline versions and decisions: source/index version, filters applied, candidate IDs and ranks, reranker/context decisions, model and prompt version, latency, token use, answer citations, and error categories. Logs should allow an authorized reviewer to reconstruct why a response happened without exposing secrets broadly. Define redaction, access, retention, and deletion behavior for traces.
+
+Run the Chapter 14 evaluation suite before promoting ingestion, index, embedding, reranking, or prompt changes. In production, monitor source freshness, loader failures, retrieval distributions, empty-result rates, latency, cost, citation issues, and user feedback. Feedback is a signal for investigation, not automatically a correct label; review it, add representative cases to evaluation, and prevent repeated incidents with regression tests.
+
+Use staged rollout, health checks, versioned artifacts, and a rollback plan. An operational incident can originate in stale sources, an incomplete migration, changed permissions, drift in query patterns, model behavior, or service load. Trace the earliest changed stage, mitigate safely, and preserve enough evidence to understand impact.
+
+The complete RAG lifecycle is now connected: maintain governed sources and representations, retrieve and construct evidence at query time, generate traceable answers, evaluate each stage, and feed observed failures into controlled improvements. Production maturity is the discipline of keeping those handoffs correct over time.
+
+## References
+
+- [NIST SP 800-207, *Zero Trust Architecture*](https://doi.org/10.6028/NIST.SP.800-207)
+- [NIST AI 600-1, *Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile*](https://doi.org/10.6028/NIST.AI.600-1)
+- [OWASP Top 10 for LLM Applications 2025](https://genai.owasp.org/llm-top-10/)

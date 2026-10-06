@@ -1,0 +1,64 @@
+---
+title: Prompt Assembly, Grounding, and Answer Generation
+description: Combine instructions, the question, and traceable evidence to generate an answer whose claims can be checked.
+order: 13
+status: complete
+toc:
+  - From evidence packet to prompt
+  - Ask for evidence-bounded answers
+  - Support, gaps, and disagreement
+  - Generate and trace claims
+  - Failure modes and handoff
+  - References
+---
+
+## From evidence packet to prompt
+
+Context construction prepares the evidence; prompt assembly gives the model the task and the evidence in a usable form. The prompt typically brings together system-level instructions, the user’s question, source-labeled context, and any required answer format. It may also specify how to handle missing or conflicting evidence. Keep these parts distinguishable so that source text is not mistaken for the question or for operating instructions.
+
+<RagIllustration kind="grounded-generation" />
+
+For example, a policy answer may ask for a concise response with a source marker for each factual claim, and instruct the model to say when the supplied material does not establish an answer. Source IDs and locations from Chapter 12 must remain attached to passages; a citation label that cannot be resolved to a real supplied source is not useful attribution.
+
+The original RAG work describes generation conditioned on retrieved documents alongside the model’s learned parameters ([Lewis et al., NeurIPS 2020](https://papers.neurips.cc/paper_files/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html)). In an application, the prompt is the concrete handoff that places selected external evidence next to the question. It guides generation; it does not change the model into a database lookup or a proof system.
+
+## Ask for evidence-bounded answers
+
+**Grounding** means that answer claims are supported by the evidence provided for this response. Good instructions make the desired behavior explicit: use the supplied context for factual claims, preserve qualifications, attach traceable source markers, and do not fill evidence gaps with guesses. A requested structure—such as a short answer followed by a caveat—can make the result easier to inspect.
+
+Instructions are guidance, not enforcement. A model can neglect relevant context, misread a qualification, combine unrelated passages, or generate a plausible claim that none of them supports. NIST describes confident presentation of erroneous or false generated content as “confabulation” in its Generative AI Profile ([NIST AI 600-1](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf)). Supplying retrieval context can help answer knowledge-intensive questions, but does not guarantee truth, completeness, or faithful use of that context.
+
+## Support, gaps, and disagreement
+
+Treat support at the level of individual claims, not merely the answer as a whole:
+
+- **Supported:** the cited passage directly entails the claim, including relevant scope and conditions.
+- **Partially supported:** answer only the supported part and state what remains unknown.
+- **Not established:** do not invent a completion. Explain the gap or abstain when the requested answer depends on it.
+- **Conflicting:** identify the disagreement and its source/version where possible; do not silently blend incompatible statements.
+
+Abstention is appropriate when the available evidence cannot responsibly answer the question—for example, when the needed passage is absent, sources conflict without a defensible resolution, or a critical qualifier is missing. It is not a magic safety switch: the model may still answer despite an instruction to abstain. In some systems, uncertainty or conflict can instead trigger another retrieval attempt or human review, but those are separate control decisions.
+
+## Generate and trace claims
+
+The model synthesizes a response from instructions, the question, supplied evidence, and its learned language patterns. It may summarize several passages, follow the requested style, and produce source markers. Those markers must point to actual context sources, and the cited sources must support the specific claims beside them. A plausible-looking citation can be misplaced or fabricated; formatting alone does not establish support.
+
+Prefer concise answers that preserve the evidence’s important scope, time, and conditions. Avoid asserting more than the sources say. If the question asks for an owner and interval and the context supports both, give each claim with its own source. If only the interval is supported, answer that part and make the missing owner information explicit rather than filling it from general knowledge.
+
+Answer quality has multiple dimensions: correctness, relevance, completeness, uncertainty handling, and whether citations are both correct and sufficient. Chapter 14 separates these generation-side checks from retrieval evaluation. A final answer should be traceable back through its citations to the assembled context and, ultimately, to the original source.
+
+## Failure modes and handoff
+
+- **Context neglect:** the model overlooks relevant supplied evidence or gives a generic answer from learned patterns.
+- **Unsupported synthesis:** individually true passages are combined into a conclusion they do not jointly establish.
+- **Overclaiming:** scope, date, exception, or uncertainty is dropped while shortening the answer.
+- **Citation mismatch:** a real source marker is attached to a claim that the source does not support, or an invented marker looks valid.
+- **False certainty under gaps:** the answer fills missing or conflicting evidence instead of qualifying or abstaining.
+- **Incomplete response:** citations are present, but one part of a multi-part question is unanswered.
+
+Prompt design can reduce ambiguity and make claims easier to inspect, but generation still requires evaluation. The next chapter measures retrieval and answer quality separately so a weak response can be traced to the stage that caused it.
+
+## References
+
+- [Lewis et al., “Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks” (NeurIPS 2020)](https://papers.neurips.cc/paper_files/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html)
+- [NIST, Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile (AI 600-1)](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf)

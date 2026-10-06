@@ -1,0 +1,63 @@
+---
+title: Reranking
+description: Re-score retrieved candidates for query relevance, then control redundancy before context construction.
+order: 11
+status: complete
+toc:
+  - Why rerank a shortlist
+  - Bi-encoders and cross-encoders
+  - Reranking depth and latency
+  - Relevance and diversity
+  - Failure modes and handoff
+  - References
+---
+
+## Why rerank a shortlist
+
+Retrieval has to search a large corpus efficiently, so it uses a representation and index that can quickly find plausible passages. But the initial order is only a first estimate of relevance. A reranker spends more computation comparing each candidate with the actual query, which can improve the order of a bounded shortlist before later stages build context.
+
+<RagIllustration kind="reranking" />
+
+The distinction is important: **retrieval generates candidates; reranking scores candidates**. A common conceptual shape is retrieve a wider set, such as 20 passages, then retain a smaller, better-ordered set, such as 3. Those numbers are illustrative—not a recommended universal setting. The reranker cannot find a passage missing from the retrieved set, repair its source, or prove that a high-scoring passage is true.
+
+## Bi-encoders and cross-encoders
+
+<RagIllustration kind="bi-cross-encoders" />
+
+A **bi-encoder** encodes the query and each passage separately. Passage vectors can be computed ahead of time and searched efficiently using vector similarity. This separation makes it practical to compare a query against a large indexed collection, but the query and passage do not interact inside the encoder while their vectors are formed.
+
+A **cross-encoder** receives the query and one passage together and produces a relevance score for that pair. Because the model processes both texts jointly, it can use their token-level interactions when deciding whether the passage addresses the query. Nogueira and Cho demonstrated this passage re-ranking approach with BERT: score query–passage pairs from an existing retrieval result and sort by those scores ([paper](https://arxiv.org/abs/1901.04085)).
+
+That joint comparison is more expensive to repeat across an entire corpus than searching precomputed passage vectors. The practical pattern is therefore often a fast first-stage retriever followed by a more expressive scorer over a limited candidate set. A cross-encoder score is a ranking signal, not a calibrated probability that the passage is relevant or correct.
+
+## Reranking depth and latency
+
+The **reranking depth** is how many retrieved candidates are sent to the reranker. A shallow depth costs less but gives the reranker fewer chances to promote a useful passage. A deeper one increases the number of query–passage comparisons and can add latency; it still cannot consider evidence outside the candidate set. Passage length, model choice, batching, and serving hardware also affect the cost, so depth should be measured on the target workload rather than chosen from a rule of thumb.
+
+Evaluate the full two-stage behavior. Check whether retrieval includes relevant evidence at the chosen cutoff, whether reranking moves it upward, and whether the resulting latency is acceptable. Inspect examples where a useful passage falls in rank: a reranker may prefer a passage that echoes the query wording while overlooking a passage that supplies a necessary constraint.
+
+## Relevance and diversity
+
+A relevance score alone may place several near-duplicate chunks at the top. Repeating the same statement consumes candidate or context budget without adding much new evidence. After relevance scoring, a system can use a diversity-aware selection rule to prefer passages that remain relevant while contributing something not already represented.
+
+**Maximal Marginal Relevance (MMR)** expresses this trade-off by repeatedly selecting a candidate that balances relevance to the query against similarity to already selected passages. One common conceptual form is:
+
+`MMR(d) = λ · Rel(q,d) − (1 − λ) · max Sim(d,s), for s in S`
+
+Here `d` is the next candidate, `q` the query, `S` the passages already selected, `Rel` a relevance score, and `Sim` a passage-to-passage similarity. The parameter `λ` (between 0 and 1) controls the balance: larger values emphasize query relevance; smaller values penalize redundancy more strongly. MMR is a selection strategy, not a guarantee of factual coverage. The original work introduced this relevance-versus-novelty criterion for diversified retrieval ([Goldstein and Carbonell, 1998](https://aclanthology.org/X98-1025/)).
+
+Reranking and diversity selection answer related but different questions. The reranker asks, “Which candidate best matches this query?” A diversity-aware selector asks, “Among relevant candidates, which set adds less repeated information?” Neither stage by itself decides final context formatting, ordering, source labels, or token-budget allocation.
+
+## Failure modes and handoff
+
+- **The answer was never retrieved.** Reranking cannot recover a missing candidate; revisit query formulation, filters, corpus coverage, or first-stage retrieval.
+- **A useful passage is demoted.** The model may be mismatched to the domain or relevance judgments, or a passage may express the answer indirectly. Inspect failures and evaluate against representative queries.
+- **Too many candidates are scored.** Deeper reranking can increase work and response time without helping if the added candidates are weak. Tune the cutoff empirically.
+- **Duplicates crowd the shortlist.** Similar passages may dominate a relevance-only ranking. Consider diversity-aware selection, while checking that it does not discard complementary details.
+
+The output is an ordered, optionally de-duplicated candidate set—not yet the prompt context. Chapter 12 covers context construction: choosing and arranging evidence, preserving its source identity, and fitting it to the generation budget.
+
+## References
+
+- [Nogueira and Cho, “Passage Re-ranking with BERT” (2019)](https://arxiv.org/abs/1901.04085)
+- [Goldstein and Carbonell, “Summarization: (1) Using MMR for Diversity-Based Reranking and (2) Evaluating Summaries” (1998)](https://aclanthology.org/X98-1025/)

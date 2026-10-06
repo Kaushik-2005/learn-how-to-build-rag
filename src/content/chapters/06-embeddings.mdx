@@ -17,14 +17,27 @@ toc:
 
 An embedding is a vector: an ordered list of numbers produced from an input such as a chunk, a query, an image, or a code file.
 
-```text
-"rotate the service credential every 30 days"
-        -> [0.12, -0.04, 0.77, ...]
-```
+<RagIllustration kind="vector-encoding" />
 
 The numbers are not a human-readable dictionary of facts. They are coordinates in a learned representation space. A model is trained so that some relationships useful for its training objectives are reflected in geometric relationships between vectors.
 
 For RAG, the important operation is to embed documents and queries into compatible representations, then compare them to find candidate passages. The embedding is a representation of the input, not a guarantee that the input is true, complete, authorized, or relevant to every possible question.
+
+### How embeddings learn similarity
+
+A text encoder first turns text into tokens, then processes them through learned layers. It combines the resulting token representations into a fixed-size vector, sometimes with a learned projection. The exact architecture and pooling step vary by model; the key output is a vector whose coordinates are learned parameters of the encoder, not hand-written scores for words.
+
+The encoder alone does not make nearby vectors mean “similar.” Training supplies that meaning. For a retrieval or similarity objective, examples considered related are trained to score closer than examples considered unrelated—often by comparing positive pairs against negative alternatives. This shapes the space so its geometry is useful for that training task. Sentence-BERT, for example, uses siamese or triplet structures to produce sentence vectors intended to be compared with cosine similarity. [Reimers and Gurevych, *Sentence-BERT*](https://arxiv.org/abs/1908.10084)
+
+At inference time, the system encodes new inputs and applies the model's intended comparison metric. Cosine similarity compares direction; dot product can also reflect vector magnitude; Euclidean distance measures separation. A smaller distance or larger similarity score means “closer under this model, training objective, and metric”—not objectively equivalent in meaning, and not proof of relevance or correctness.
+
+### A concrete cross-modal example: CLIP aligns images and text
+
+CLIP (Contrastive Language-Image Pre-training) makes the idea of a learned comparison space concrete. It has an image encoder and a text encoder that map their different inputs into a shared vector space. During training, it learns to give paired image-caption examples greater similarity than mismatched pairs. The geometry is therefore shaped by the training objective and data; it is not a universal map of meaning. [Radford et al., *Learning Transferable Visual Models From Natural Language Supervision*](https://arxiv.org/abs/2103.00020); see also [OpenAI's CLIP overview](https://openai.com/index/clip/).
+
+At use time, an image and several candidate descriptions can be encoded, then compared using cosine similarity (or an equivalent dot product when the vectors are normalized). The highest-scoring description is the closest match among those candidates according to CLIP. That score does **not** prove the description is true, nor is it a probability of correctness. It is a model-dependent ranking signal.
+
+The same intuition carries over to text retrieval: a query and passages are mapped into a compatible space, and a metric ranks nearby candidates. But CLIP is a cross-modal image-text model, not evidence that every text embedding model learns the same geometry or that geometric closeness always means task relevance.
 
 <RagIllustration kind="embeddings" />
 
@@ -44,33 +57,23 @@ The query and document encoders may be the same model or related components trai
 
 ## Similarity and distance
 
+These three views explain common ways a system compares a query vector `q` with a document vector `d`. The geometry is simplified to two dimensions; real embeddings usually have many more.
+
+<RagIllustration kind="similarity-metrics" />
+
 ### Cosine similarity
 
-Cosine similarity compares the angle between two vectors:
-
-```text
-cosine(q, d) = (q · d) / (||q|| ||d||)
-```
+Cosine similarity compares the angle between two vectors, as shown above.
 
 Here `q · d` is the dot product, and `||q||` and `||d||` are vector lengths. The score focuses on direction rather than magnitude. If vectors are normalized to unit length, cosine similarity and dot product produce the same ranking.
 
 ### Dot product
 
-The dot product is:
-
-```text
-q · d = q1d1 + q2d2 + ... + qndn
-```
-
-It rewards alignment and, when vectors are not normalized, also reflects magnitude. Whether magnitude should influence ranking is a model and system decision. A system must use the metric for which its embedding model and index configuration were designed.
+The dot product sums pairwise coordinate products. Geometrically, it rewards alignment and, when vectors are not normalized, also reflects magnitude. Whether magnitude should influence ranking is a model and system decision. A system must use the metric for which its embedding model and index configuration were designed.
 
 ### Euclidean distance
 
-Euclidean distance measures the straight-line distance between vectors:
-
-```text
-distance(q, d) = sqrt(sum((qi - di)^2))
-```
+Euclidean distance measures the straight-line distance between vectors, as shown above.
 
 For normalized vectors, Euclidean distance and cosine similarity are monotonically related, so they produce equivalent rankings when applied consistently. Without normalization, they can rank candidates differently.
 
@@ -146,14 +149,8 @@ Measure candidate recall and ranking quality, then inspect failures. The model i
 
 Embeddings are derived artifacts. They depend on the source text, chunking configuration, model, input formatting, preprocessing, and normalization policy. An illustrative metadata record (not a required schema) might include:
 
-```text
-embedding_model: model identifier and revision
-embedding_dimension: 1024
-metric: cosine
-normalized: true
-chunking_version: v3
-created_at: timestamp
-```
+<CodeExample kind="embedding-record" />
+
 
 This metadata makes an index explainable and supports migrations.
 
@@ -185,13 +182,7 @@ Embeddings do not guarantee:
 
 Semantic similarity is also not identical to relevance. A passage can be about the same topic but fail to answer the question. The retrieval stage therefore needs explicit evaluation and often complementary signals such as sparse search, metadata filters, or reranking.
 
-Embeddings are one transformation in the pipeline:
-
-```text
-prepared text -> embedding vector -> similarity search -> candidates
-```
-
-They do not replace preparation, indexing, retrieval evaluation, context construction, or answer verification.
+Embeddings are one transformation in the larger pipeline described earlier: preparation produces text, the encoder turns it into a vector, and a compatible index makes it searchable. That transformation does not replace preparation, retrieval evaluation, context construction, or answer verification.
 
 Once document and query vectors share a compatible representation, the system still needs a structure that stores their records and finds candidate neighbors. That is the role of vector stores and indexes in the next chapter.
 
@@ -201,3 +192,5 @@ Once document and query vectors share a compatible representation, the system st
 - [Reimers and Gurevych, “Sentence-BERT”](https://arxiv.org/abs/1908.10084)
 - [Karpukhin et al., “Dense Passage Retrieval for Open-Domain Question Answering”](https://arxiv.org/abs/2004.04906)
 - [Lewis et al., “Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks”](https://arxiv.org/abs/2005.11401)
+- [Radford et al., *Learning Transferable Visual Models From Natural Language Supervision* (CLIP)](https://arxiv.org/abs/2103.00020)
+- [OpenAI, CLIP: Connecting text and images](https://openai.com/index/clip/)
