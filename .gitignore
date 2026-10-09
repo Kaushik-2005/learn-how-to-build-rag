@@ -35,3 +35,7 @@ Desktop.ini
 !README.md
 *.json
 *.mjs
+!package.json
+!package-lock.json
+!tsconfig.json
+!astro.config.mjs
