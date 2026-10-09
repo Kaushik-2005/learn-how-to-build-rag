@@ -29,3 +29,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+
+*.md
+!README.md
+*.json
+*.mjs
